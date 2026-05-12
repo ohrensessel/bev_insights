@@ -11,6 +11,8 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_CAPACITY_ACTUAL,
     CONF_CAPACITY_FACTORY,
+    CONF_CHARGING_SENSOR,
+    CONF_MILEAGE_SENSOR,
     CONF_NAME,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
@@ -18,6 +20,12 @@ from .const import (
     DEFAULT_NAME,
     DOMAIN,
 )
+
+
+def _sensor_or_binary_selector() -> selector.EntitySelector:
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+    )
 
 
 def _sensor_selector() -> selector.EntitySelector:
@@ -40,27 +48,44 @@ def _capacity_selector() -> selector.NumberSelector:
 
 def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)
-            ): str,
-            vol.Required(
-                CONF_SOC_SENSOR, default=defaults.get(CONF_SOC_SENSOR)
-            ): _sensor_selector(),
-            vol.Required(
-                CONF_RANGE_SENSOR, default=defaults.get(CONF_RANGE_SENSOR)
-            ): _sensor_selector(),
-            vol.Required(
-                CONF_CAPACITY_FACTORY,
-                default=defaults.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH),
-            ): _capacity_selector(),
-            vol.Required(
-                CONF_CAPACITY_ACTUAL,
-                default=defaults.get(CONF_CAPACITY_ACTUAL, DEFAULT_CAPACITY_KWH),
-            ): _capacity_selector(),
-        }
-    )
+
+    fields: dict[Any, Any] = {
+        vol.Required(
+            CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)
+        ): str,
+        vol.Required(
+            CONF_SOC_SENSOR, default=defaults.get(CONF_SOC_SENSOR)
+        ): _sensor_selector(),
+        vol.Required(
+            CONF_RANGE_SENSOR, default=defaults.get(CONF_RANGE_SENSOR)
+        ): _sensor_selector(),
+        vol.Required(
+            CONF_CAPACITY_FACTORY,
+            default=defaults.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH),
+        ): _capacity_selector(),
+        vol.Required(
+            CONF_CAPACITY_ACTUAL,
+            default=defaults.get(CONF_CAPACITY_ACTUAL, DEFAULT_CAPACITY_KWH),
+        ): _capacity_selector(),
+    }
+
+    charging_default = defaults.get(CONF_CHARGING_SENSOR)
+    if charging_default is not None:
+        fields[
+            vol.Optional(CONF_CHARGING_SENSOR, default=charging_default)
+        ] = _sensor_or_binary_selector()
+    else:
+        fields[vol.Optional(CONF_CHARGING_SENSOR)] = _sensor_or_binary_selector()
+
+    mileage_default = defaults.get(CONF_MILEAGE_SENSOR)
+    if mileage_default is not None:
+        fields[
+            vol.Optional(CONF_MILEAGE_SENSOR, default=mileage_default)
+        ] = _sensor_selector()
+    else:
+        fields[vol.Optional(CONF_MILEAGE_SENSOR)] = _sensor_selector()
+
+    return vol.Schema(fields)
 
 
 class MySkodaInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

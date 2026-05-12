@@ -12,7 +12,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import (
+    CONF_CHARGING_SENSOR,
+    CONF_MILEAGE_SENSOR,
+    CONF_SOC_SENSOR,
+    DOMAIN,
+)
+from .tracker import ChargeTracker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +28,26 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MySkoda Insights from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {"data": dict(entry.data)}
+
+    charging_entity = entry.data.get(CONF_CHARGING_SENSOR)
+    mileage_entity = entry.data.get(CONF_MILEAGE_SENSOR)
+
+    tracker: ChargeTracker | None = None
+    if charging_entity and mileage_entity:
+        tracker = ChargeTracker(
+            hass,
+            entry,
+            charging_entity=charging_entity,
+            mileage_entity=mileage_entity,
+            soc_entity=entry.data[CONF_SOC_SENSOR],
+        )
+        await tracker.async_load()
+        tracker.async_start()
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        "data": dict(entry.data),
+        "tracker": tracker,
+    }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -34,7 +59,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        domain_data = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if domain_data:
+            if tracker := domain_data.get("tracker"):
+                await tracker.async_stop()
     return unload_ok
 
 

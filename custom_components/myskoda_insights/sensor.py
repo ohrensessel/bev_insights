@@ -4,10 +4,15 @@ Each sensor reads values from existing myskoda entities and recomputes
 itself whenever those sources change state. Capacity-dependent sensors
 are instantiated once per configured battery capacity (factory-new vs.
 actual remaining).
+
+The "measured full range" sensor is wired up to the ChargeTracker via the
+HA dispatcher, so it also recomputes whenever a charging session ends and
+the baseline is updated.
 """
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -17,8 +22,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
+    EntityCategory,
     UnitOfLength,
 )
 from homeassistant.core import (
@@ -28,12 +32,19 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    BASELINE_MILEAGE_KM,
+    BASELINE_SOC_PERCENT,
+    BASELINE_TIMESTAMP,
     CONF_CAPACITY_ACTUAL,
     CONF_CAPACITY_FACTORY,
+    CONF_CHARGING_SENSOR,
+    CONF_MILEAGE_SENSOR,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
     DEFAULT_CAPACITY_KWH,
@@ -41,43 +52,12 @@ from .const import (
     UNIT_KWH_PER_100KM,
     VARIANT_ACTUAL,
     VARIANT_FACTORY,
+    signal_baseline_updated,
 )
+from .tracker import ChargeTracker
+from .util import read_distance_km, read_float
 
 _LOGGER = logging.getLogger(__name__)
-
-_INVALID_STATES: frozenset[str | None] = frozenset(
-    {None, "", STATE_UNAVAILABLE, STATE_UNKNOWN}
-)
-
-_DISTANCE_TO_KM: dict[str, float] = {
-    "km": 1.0,
-    "mi": 1.609344,
-    "m": 0.001,
-}
-
-
-def _read_float(hass: HomeAssistant, entity_id: str) -> float | None:
-    state = hass.states.get(entity_id)
-    if state is None or state.state in _INVALID_STATES:
-        return None
-    try:
-        return float(state.state)
-    except (TypeError, ValueError):
-        return None
-
-
-def _read_distance_km(hass: HomeAssistant, entity_id: str) -> float | None:
-    """Return an entity's state in kilometres regardless of source unit."""
-    state = hass.states.get(entity_id)
-    if state is None or state.state in _INVALID_STATES:
-        return None
-    try:
-        value = float(state.state)
-    except (TypeError, ValueError):
-        return None
-    unit = state.attributes.get("unit_of_measurement") or "km"
-    factor = _DISTANCE_TO_KM.get(unit, 1.0)
-    return value * factor
 
 
 async def async_setup_entry(
@@ -86,7 +66,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up MySkoda Insights sensors from a config entry."""
-    data = hass.data[DOMAIN][entry.entry_id]["data"]
+    domain_data = hass.data[DOMAIN][entry.entry_id]
+    data = domain_data["data"]
+    tracker: ChargeTracker | None = domain_data.get("tracker")
+
     soc_entity: str = data[CONF_SOC_SENSOR]
     range_entity: str = data[CONF_RANGE_SENSOR]
     capacity_factory = float(data.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH))
@@ -105,6 +88,28 @@ async def async_setup_entry(
             capacity_variant=VARIANT_ACTUAL,
         ),
     ]
+
+    if tracker is not None:
+        mileage_entity: str = data[CONF_MILEAGE_SENSOR]
+        entities.append(
+            MeasuredFullRangeSensor(entry, tracker, soc_entity, mileage_entity)
+        )
+        entities.append(LastChargedSensor(entry, tracker))
+        entities.append(
+            MeasuredEfficiencySensor(
+                entry, tracker, soc_entity, mileage_entity,
+                capacity_kwh=capacity_factory,
+                capacity_variant=VARIANT_FACTORY,
+            )
+        )
+        entities.append(
+            MeasuredEfficiencySensor(
+                entry, tracker, soc_entity, mileage_entity,
+                capacity_kwh=capacity_actual,
+                capacity_variant=VARIANT_ACTUAL,
+            )
+        )
+
     async_add_entities(entities)
 
 
@@ -158,15 +163,12 @@ class MySkodaDerivedSensor(SensorEntity):
 
 
 # --------------------------------------------------------------------------- #
-# Sensors                                                                     #
+# Capacity-independent sensors                                                #
 # --------------------------------------------------------------------------- #
 
 
 class FullBatteryRangeSensor(MySkodaDerivedSensor):
-    """Electric range extrapolated to a 100% state of charge.
-
-    Computed as:  range_at_100% = current_range / current_soc * 100
-    """
+    """Electric range extrapolated to a 100% state of charge."""
 
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -186,8 +188,8 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
 
     @callback
     def _recalculate(self) -> None:
-        soc = _read_float(self.hass, self._soc_entity)
-        current_range = _read_distance_km(self.hass, self._range_entity)
+        soc = read_float(self.hass, self._soc_entity)
+        current_range = read_distance_km(self.hass, self._range_entity)
 
         if soc is None or current_range is None or soc <= 0 or current_range < 0:
             self._attr_available = False
@@ -203,9 +205,14 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
         return {
             "soc_source": self._soc_entity,
             "range_source": self._range_entity,
-            "current_soc_percent": _read_float(self.hass, self._soc_entity),
-            "current_range_km": _read_distance_km(self.hass, self._range_entity),
+            "current_soc_percent": read_float(self.hass, self._soc_entity),
+            "current_range_km": read_distance_km(self.hass, self._range_entity),
         }
+
+
+# --------------------------------------------------------------------------- #
+# Capacity-dependent sensors                                                  #
+# --------------------------------------------------------------------------- #
 
 
 class EfficiencySensor(MySkodaDerivedSensor):
@@ -239,8 +246,8 @@ class EfficiencySensor(MySkodaDerivedSensor):
 
     @callback
     def _recalculate(self) -> None:
-        soc = _read_float(self.hass, self._soc_entity)
-        current_range = _read_distance_km(self.hass, self._range_entity)
+        soc = read_float(self.hass, self._soc_entity)
+        current_range = read_distance_km(self.hass, self._range_entity)
 
         if (
             soc is None
@@ -267,3 +274,279 @@ class EfficiencySensor(MySkodaDerivedSensor):
             "soc_source": self._soc_entity,
             "range_source": self._range_entity,
         }
+
+
+# --------------------------------------------------------------------------- #
+# Tracker-dependent sensors                                                   #
+# --------------------------------------------------------------------------- #
+
+
+class _TrackerLinkedMixin:
+    """Adds a subscription to baseline-updated dispatcher signals.
+
+    Mixin used by sensors that need to recompute when the ChargeTracker
+    writes a new baseline.
+    """
+
+    _entry: ConfigEntry
+
+    def _subscribe_baseline_updates(self) -> None:
+        @callback
+        def _baseline_listener() -> None:
+            self._recalculate()  # type: ignore[attr-defined]
+            self.async_write_ha_state()  # type: ignore[attr-defined]
+
+        self.async_on_remove(  # type: ignore[attr-defined]
+            async_dispatcher_connect(
+                self.hass,  # type: ignore[attr-defined]
+                signal_baseline_updated(self._entry.entry_id),
+                _baseline_listener,
+            )
+        )
+
+
+class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+    """Range at 100% SoC, measured from actual driving since last charge."""
+
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
+    _attr_icon = "mdi:map-marker-path"
+    _attr_suggested_display_precision = 0
+    _attr_translation_key = "measured_full_range"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        tracker: ChargeTracker,
+        soc_entity: str,
+        mileage_entity: str,
+    ) -> None:
+        super().__init__(entry, [soc_entity, mileage_entity])
+        self._tracker = tracker
+        self._soc_entity = soc_entity
+        self._mileage_entity = mileage_entity
+        self._attr_unique_id = f"{entry.entry_id}_measured_full_range"
+        self._attr_name = "Measured full range"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+    @callback
+    def _recalculate(self) -> None:
+        baseline = self._tracker.baseline
+        if baseline is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        baseline_mileage = baseline.get(BASELINE_MILEAGE_KM)
+        baseline_soc = baseline.get(BASELINE_SOC_PERCENT)
+        if baseline_mileage is None or baseline_soc is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        current_mileage = read_distance_km(self.hass, self._mileage_entity)
+        current_soc = read_float(self.hass, self._soc_entity)
+        if current_mileage is None or current_soc is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        distance_km = current_mileage - baseline_mileage
+        soc_consumed = baseline_soc - current_soc
+
+        if distance_km <= 0 or soc_consumed <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        self._attr_available = True
+        self._attr_native_value = round(distance_km / soc_consumed * 100.0, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        baseline = self._tracker.baseline or {}
+        current_mileage = read_distance_km(self.hass, self._mileage_entity)
+        current_soc = read_float(self.hass, self._soc_entity)
+
+        attrs: dict[str, Any] = {
+            "baseline_mileage_km": baseline.get(BASELINE_MILEAGE_KM),
+            "baseline_soc_percent": baseline.get(BASELINE_SOC_PERCENT),
+            "baseline_timestamp": baseline.get(BASELINE_TIMESTAMP),
+            "current_mileage_km": current_mileage,
+            "current_soc_percent": current_soc,
+        }
+        if (
+            baseline.get(BASELINE_MILEAGE_KM) is not None
+            and current_mileage is not None
+        ):
+            attrs["distance_since_last_charge_km"] = round(
+                current_mileage - baseline[BASELINE_MILEAGE_KM], 1
+            )
+        if (
+            baseline.get(BASELINE_SOC_PERCENT) is not None
+            and current_soc is not None
+        ):
+            attrs["soc_consumed_since_last_charge_percent"] = round(
+                baseline[BASELINE_SOC_PERCENT] - current_soc, 1
+            )
+        return attrs
+
+
+class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+    """Diagnostic: timestamp + mileage/SoC at the last detected charge end."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:battery-charging"
+    _attr_translation_key = "last_charged"
+
+    def __init__(self, entry: ConfigEntry, tracker: ChargeTracker) -> None:
+        super().__init__(entry, source_entities=[])
+        self._tracker = tracker
+        self._attr_unique_id = f"{entry.entry_id}_last_charged"
+        self._attr_name = "Last charged"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+    @callback
+    def _recalculate(self) -> None:
+        baseline = self._tracker.baseline
+        if baseline is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        ts = baseline.get(BASELINE_TIMESTAMP)
+        if not ts:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        parsed: datetime | None = dt_util.parse_datetime(ts)
+        if parsed is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        self._attr_available = True
+        self._attr_native_value = parsed
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        baseline = self._tracker.baseline or {}
+        return {
+            "mileage_km": baseline.get(BASELINE_MILEAGE_KM),
+            "soc_percent": baseline.get(BASELINE_SOC_PERCENT),
+        }
+
+
+class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+    """Implied efficiency from real driving since the last charge end.
+
+        kWh/100 km = capacity * soc_consumed / distance_km
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UNIT_KWH_PER_100KM
+    _attr_icon = "mdi:lightning-bolt"
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        tracker: ChargeTracker,
+        soc_entity: str,
+        mileage_entity: str,
+        capacity_kwh: float,
+        capacity_variant: str,
+    ) -> None:
+        super().__init__(entry, [soc_entity, mileage_entity])
+        self._tracker = tracker
+        self._soc_entity = soc_entity
+        self._mileage_entity = mileage_entity
+        self._capacity_kwh = capacity_kwh
+        self._capacity_variant = capacity_variant
+
+        self._attr_unique_id = (
+            f"{entry.entry_id}_measured_efficiency_{capacity_variant}"
+        )
+        self._attr_translation_key = f"measured_efficiency_{capacity_variant}"
+        self._attr_name = (
+            f"Measured efficiency ({capacity_variant} capacity, kWh/100 km)"
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+    @callback
+    def _recalculate(self) -> None:
+        baseline = self._tracker.baseline
+        if baseline is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        baseline_mileage = baseline.get(BASELINE_MILEAGE_KM)
+        baseline_soc = baseline.get(BASELINE_SOC_PERCENT)
+        current_mileage = read_distance_km(self.hass, self._mileage_entity)
+        current_soc = read_float(self.hass, self._soc_entity)
+
+        if (
+            baseline_mileage is None
+            or baseline_soc is None
+            or current_mileage is None
+            or current_soc is None
+        ):
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        distance_km = current_mileage - baseline_mileage
+        soc_consumed = baseline_soc - current_soc
+
+        if distance_km <= 0 or soc_consumed <= 0 or self._capacity_kwh <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        soc_consumed = min(soc_consumed, 100.0)
+        self._attr_available = True
+        self._attr_native_value = round(
+            self._capacity_kwh * soc_consumed / distance_km, 2
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        baseline = self._tracker.baseline or {}
+        current_mileage = read_distance_km(self.hass, self._mileage_entity)
+        current_soc = read_float(self.hass, self._soc_entity)
+
+        attrs: dict[str, Any] = {
+            "capacity_variant": self._capacity_variant,
+            "capacity_kwh": self._capacity_kwh,
+            "baseline_mileage_km": baseline.get(BASELINE_MILEAGE_KM),
+            "baseline_soc_percent": baseline.get(BASELINE_SOC_PERCENT),
+            "baseline_timestamp": baseline.get(BASELINE_TIMESTAMP),
+        }
+        if (
+            baseline.get(BASELINE_MILEAGE_KM) is not None
+            and current_mileage is not None
+        ):
+            attrs["distance_since_last_charge_km"] = round(
+                current_mileage - baseline[BASELINE_MILEAGE_KM], 1
+            )
+        if (
+            baseline.get(BASELINE_SOC_PERCENT) is not None
+            and current_soc is not None
+        ):
+            attrs["soc_consumed_since_last_charge_percent"] = round(
+                baseline[BASELINE_SOC_PERCENT] - current_soc, 1
+            )
+        return attrs

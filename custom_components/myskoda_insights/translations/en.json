@@ -3,30 +3,38 @@
     "step": {
       "user": {
         "title": "MySkoda Insights",
-        "description": "Pick the MySkoda sensors and battery capacities used to derive additional insights.",
+        "description": "Pick the MySkoda sensors and battery capacities used to derive additional insights. The charging-state and mileage sensors are optional; without them the 'measured full range' sensor isn't created.",
         "data": {
           "name": "Name",
           "soc_sensor": "Battery percentage (SoC) sensor",
           "range_sensor": "Remaining electric range sensor",
+          "charging_sensor": "Charging-state sensor (optional)",
+          "mileage_sensor": "Mileage / odometer sensor (optional)",
           "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
           "capacity_actual_kwh": "Current remaining battery capacity (kWh)"
         },
         "data_description": {
+          "charging_sensor": "Used to detect when a charge has just ended. May be a sensor or a binary_sensor.",
+          "mileage_sensor": "The car's odometer, used to measure distance driven since the last charge.",
           "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
           "capacity_actual_kwh": "Your battery's current real-world capacity in kWh. Update this periodically as the battery ages."
         }
       },
       "reconfigure": {
         "title": "MySkoda Insights",
-        "description": "Update the sensors and capacity values used for the calculations.",
+        "description": "Update the sensors, charging tracker inputs and capacity values used for the calculations.",
         "data": {
           "name": "Name",
           "soc_sensor": "Battery percentage (SoC) sensor",
           "range_sensor": "Remaining electric range sensor",
+          "charging_sensor": "Charging-state sensor (optional)",
+          "mileage_sensor": "Mileage / odometer sensor (optional)",
           "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
           "capacity_actual_kwh": "Current remaining battery capacity (kWh)"
         },
         "data_description": {
+          "charging_sensor": "Used to detect when a charge has just ended. May be a sensor or a binary_sensor.",
+          "mileage_sensor": "The car's odometer, used to measure distance driven since the last charge.",
           "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
           "capacity_actual_kwh": "Your battery's current real-world capacity in kWh. Update this periodically as the battery ages."
         }
@@ -47,6 +55,18 @@
       },
       "efficiency_actual": {
         "name": "Efficiency (actual capacity, kWh/100 km)"
+      },
+      "measured_full_range": {
+        "name": "Measured full range"
+      },
+      "measured_efficiency_factory": {
+        "name": "Measured efficiency (factory capacity, kWh/100 km)"
+      },
+      "measured_efficiency_actual": {
+        "name": "Measured efficiency (actual capacity, kWh/100 km)"
+      },
+      "last_charged": {
+        "name": "Last charged"
       }
     }
   }
