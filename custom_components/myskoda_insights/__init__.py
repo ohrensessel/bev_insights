@@ -18,7 +18,7 @@ from .const import (
     CONF_SOC_SENSOR,
     DOMAIN,
 )
-from .tracker import ChargeTracker, MileageHistory
+from .tracker import ChargeTracker, MileageHistory, SocHistory
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,10 +52,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await mileage_history.async_load()
         mileage_history.async_start()
 
+    soc_history = SocHistory(
+        hass, entry, soc_entity=entry.data[CONF_SOC_SENSOR]
+    )
+    await soc_history.async_load()
+    soc_history.async_start()
+
     hass.data[DOMAIN][entry.entry_id] = {
         "data": dict(entry.data),
         "tracker": tracker,
         "mileage_history": mileage_history,
+        "soc_history": soc_history,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -74,6 +81,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await tracker.async_stop()
             if mileage_history := domain_data.get("mileage_history"):
                 await mileage_history.async_stop()
+            if soc_history := domain_data.get("soc_history"):
+                await soc_history.async_stop()
     return unload_ok
 
 

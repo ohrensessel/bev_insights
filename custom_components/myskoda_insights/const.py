@@ -35,10 +35,12 @@ UNIT_VARIANT_KM_PER_KWH = "km_per_kwh"
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}.charge_tracker"
 MILEAGE_HISTORY_KEY_PREFIX = f"{DOMAIN}.mileage_history"
+SOC_HISTORY_KEY_PREFIX = f"{DOMAIN}.soc_history"
 
 # How many days of samples to retain (a bit more than a week so the
 # rolling 7-day window always has data on both sides of the cutoff).
 MILEAGE_HISTORY_DAYS = 8
+SOC_HISTORY_DAYS = 8
 
 # Dispatcher signal sent when a charge-end event updates the baseline.
 def signal_baseline_updated(entry_id: str) -> str:
@@ -47,6 +49,10 @@ def signal_baseline_updated(entry_id: str) -> str:
 
 def signal_mileage_history_updated(entry_id: str) -> str:
     return f"{DOMAIN}_mileage_history_updated_{entry_id}"
+
+
+def signal_soc_history_updated(entry_id: str) -> str:
+    return f"{DOMAIN}_soc_history_updated_{entry_id}"
 
 
 # Baseline dict keys (what we persist via Store)

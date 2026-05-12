@@ -85,6 +85,42 @@
       },
       "distance_this_week": {
         "name": "Distance driven (this week)"
+      },
+      "energy_consumed_rolling_7_days_factory": {
+        "name": "Energy consumed (rolling 7 days, factory capacity)"
+      },
+      "energy_consumed_rolling_7_days_actual": {
+        "name": "Energy consumed (rolling 7 days, actual capacity)"
+      },
+      "energy_consumed_this_week_factory": {
+        "name": "Energy consumed (this week, factory capacity)"
+      },
+      "energy_consumed_this_week_actual": {
+        "name": "Energy consumed (this week, actual capacity)"
+      },
+      "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
+        "name": "Average efficiency (rolling 7 days, factory capacity, kWh/100 km)"
+      },
+      "avg_efficiency_rolling_7_days_factory_km_per_kwh": {
+        "name": "Average efficiency (rolling 7 days, factory capacity, km/kWh)"
+      },
+      "avg_efficiency_rolling_7_days_actual_kwh_per_100km": {
+        "name": "Average efficiency (rolling 7 days, actual capacity, kWh/100 km)"
+      },
+      "avg_efficiency_rolling_7_days_actual_km_per_kwh": {
+        "name": "Average efficiency (rolling 7 days, actual capacity, km/kWh)"
+      },
+      "avg_efficiency_this_week_factory_kwh_per_100km": {
+        "name": "Average efficiency (this week, factory capacity, kWh/100 km)"
+      },
+      "avg_efficiency_this_week_factory_km_per_kwh": {
+        "name": "Average efficiency (this week, factory capacity, km/kWh)"
+      },
+      "avg_efficiency_this_week_actual_kwh_per_100km": {
+        "name": "Average efficiency (this week, actual capacity, kWh/100 km)"
+      },
+      "avg_efficiency_this_week_actual_km_per_kwh": {
+        "name": "Average efficiency (this week, actual capacity, km/kWh)"
       }
     }
   }

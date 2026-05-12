@@ -36,10 +36,13 @@ from .const import (
     BASELINE_TIMESTAMP,
     MILEAGE_HISTORY_DAYS,
     MILEAGE_HISTORY_KEY_PREFIX,
+    SOC_HISTORY_DAYS,
+    SOC_HISTORY_KEY_PREFIX,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
     signal_baseline_updated,
     signal_mileage_history_updated,
+    signal_soc_history_updated,
 )
 from .util import is_charging, read_distance_km, read_float
 
@@ -337,3 +340,63 @@ class MileageHistory(EntityHistory):
 
     def _postprocess_delta(self, raw_delta: float) -> float:
         return max(0.0, raw_delta)
+
+
+class SocHistory(EntityHistory):
+    """Rolling window of state-of-charge samples in percent.
+
+    Used to compute kWh consumed over a window:
+        kWh = capacity * soc_consumed_percent / 100
+    where `soc_consumed_percent` sums up all the SoC decreases between
+    sample points, ignoring the upward jumps caused by charging.
+    """
+
+    _label = "soc"
+    _value_key = "soc_percent"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        soc_entity: str,
+    ) -> None:
+        super().__init__(
+            hass,
+            entry,
+            source_entity=soc_entity,
+            storage_key_prefix=SOC_HISTORY_KEY_PREFIX,
+            max_age_days=SOC_HISTORY_DAYS,
+        )
+
+    def _read(self) -> float | None:
+        value = read_float(self.hass, self._source_entity)
+        if value is None:
+            return None
+        return min(max(value, 0.0), 100.0)
+
+    def _signal(self) -> str:
+        return signal_soc_history_updated(self.entry.entry_id)
+
+    def consumed_since(self, cutoff: datetime) -> float | None:
+        """Return total SoC consumed (percent) since `cutoff`, or None.
+
+        Walks the samples chronologically and sums the magnitude of each
+        downward step. Upward steps (charging) are skipped.
+        """
+        if not self._samples:
+            return None
+        anchor_index: int | None = None
+        for i, (ts, _) in enumerate(self._samples):
+            if ts <= cutoff:
+                anchor_index = i
+            else:
+                break
+        if anchor_index is None:
+            return None
+        consumed = 0.0
+        previous_value = self._samples[anchor_index][1]
+        for ts, value in list(self._samples)[anchor_index + 1 :]:
+            if value < previous_value:
+                consumed += previous_value - value
+            previous_value = value
+        return consumed

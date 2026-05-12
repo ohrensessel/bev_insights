@@ -23,6 +23,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     EntityCategory,
+    UnitOfEnergy,
     UnitOfLength,
 )
 from homeassistant.core import (
@@ -60,8 +61,9 @@ from .const import (
     VARIANT_FACTORY,
     signal_baseline_updated,
     signal_mileage_history_updated,
+    signal_soc_history_updated,
 )
-from .tracker import ChargeTracker, MileageHistory
+from .tracker import ChargeTracker, MileageHistory, SocHistory
 from .util import read_distance_km, read_float
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,6 +79,7 @@ async def async_setup_entry(
     data = domain_data["data"]
     tracker: ChargeTracker | None = domain_data.get("tracker")
     mileage_history: MileageHistory | None = domain_data.get("mileage_history")
+    soc_history: SocHistory | None = domain_data.get("soc_history")
 
     soc_entity: str = data[CONF_SOC_SENSOR]
     range_entity: str = data[CONF_RANGE_SENSOR]
@@ -136,6 +139,51 @@ async def async_setup_entry(
                 entry, mileage_history, data[CONF_MILEAGE_SENSOR]
             )
         )
+
+    WINDOWS = (
+        ("rolling_7_days", "Rolling 7 days"),
+        ("this_week", "This week"),
+    )
+
+    if soc_history is not None:
+        for window_key, window_label in WINDOWS:
+            for capacity_kwh, capacity_variant in (
+                (capacity_factory, VARIANT_FACTORY),
+                (capacity_actual, VARIANT_ACTUAL),
+            ):
+                entities.append(
+                    EnergyConsumedWindowSensor(
+                        entry,
+                        soc_history,
+                        capacity_kwh=capacity_kwh,
+                        capacity_variant=capacity_variant,
+                        window_key=window_key,
+                        window_label=window_label,
+                    )
+                )
+
+    if soc_history is not None and mileage_history is not None:
+        for window_key, window_label in WINDOWS:
+            for capacity_kwh, capacity_variant in (
+                (capacity_factory, VARIANT_FACTORY),
+                (capacity_actual, VARIANT_ACTUAL),
+            ):
+                for unit_variant in (
+                    UNIT_VARIANT_KWH_PER_100KM,
+                    UNIT_VARIANT_KM_PER_KWH,
+                ):
+                    entities.append(
+                        AverageEfficiencyWindowSensor(
+                            entry,
+                            soc_history,
+                            mileage_history,
+                            capacity_kwh=capacity_kwh,
+                            capacity_variant=capacity_variant,
+                            unit_variant=unit_variant,
+                            window_key=window_key,
+                            window_label=window_label,
+                        )
+                    )
 
     async_add_entities(entities)
 
@@ -777,3 +825,217 @@ class DistanceThisWeekSensor(MySkodaDerivedSensor):
         else:
             attrs["partial_week_data"] = False
         return attrs
+
+
+# --------------------------------------------------------------------------- #
+# Window-based sensors (kWh consumed, average efficiency)                     #
+# --------------------------------------------------------------------------- #
+
+
+def _window_cutoff(
+    hass: HomeAssistant, window_key: str, now_utc: datetime
+) -> datetime:
+    """Return the cutoff timestamp for a named window."""
+    if window_key == "this_week":
+        return _local_week_start(now_utc, hass)
+    return now_utc - timedelta(days=7)
+
+
+class _WindowedSensor(MySkodaDerivedSensor):
+    """Common scaffolding for window-based sensors.
+
+    Listens to both history dispatchers plus an hourly time tick.
+    """
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        window_key: str,
+        window_label: str,
+        listen_soc_history: bool,
+        listen_mileage_history: bool,
+    ) -> None:
+        super().__init__(entry, source_entities=[])
+        self._window_key = window_key
+        self._window_label = window_label
+        self._listen_soc_history = listen_soc_history
+        self._listen_mileage_history = listen_mileage_history
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _tick(_=None) -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        if self._listen_soc_history:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    signal_soc_history_updated(self._entry.entry_id),
+                    _tick,
+                )
+            )
+        if self._listen_mileage_history:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    signal_mileage_history_updated(self._entry.entry_id),
+                    _tick,
+                )
+            )
+
+        self.async_on_remove(
+            async_track_time_change(self.hass, _tick, minute=0, second=0)
+        )
+
+
+class EnergyConsumedWindowSensor(_WindowedSensor):
+    """kWh consumed over a window.
+
+        kWh = capacity * soc_consumed_percent / 100
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:lightning-bolt-circle"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_history: SocHistory,
+        capacity_kwh: float,
+        capacity_variant: str,
+        window_key: str,
+        window_label: str,
+    ) -> None:
+        super().__init__(
+            entry, window_key, window_label,
+            listen_soc_history=True,
+            listen_mileage_history=False,
+        )
+        self._soc_history = soc_history
+        self._capacity_kwh = capacity_kwh
+        self._capacity_variant = capacity_variant
+        self._attr_unique_id = (
+            f"{entry.entry_id}_energy_consumed_{window_key}_{capacity_variant}"
+        )
+        self._attr_translation_key = (
+            f"energy_consumed_{window_key}_{capacity_variant}"
+        )
+        self._attr_name = (
+            f"Energy consumed ({window_label.lower()}, {capacity_variant} capacity)"
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        consumed_pct = self._soc_history.consumed_since(cutoff)
+        if consumed_pct is None or self._capacity_kwh <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = round(
+            self._capacity_kwh * consumed_pct / 100.0, 2
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        consumed_pct = self._soc_history.consumed_since(cutoff)
+        return {
+            "window": self._window_key,
+            "window_start": cutoff.isoformat(),
+            "capacity_variant": self._capacity_variant,
+            "capacity_kwh": self._capacity_kwh,
+            "soc_consumed_percent": (
+                round(consumed_pct, 2) if consumed_pct is not None else None
+            ),
+        }
+
+
+class AverageEfficiencyWindowSensor(_WindowedSensor):
+    """Average driving efficiency over a window."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_history: SocHistory,
+        mileage_history: MileageHistory,
+        capacity_kwh: float,
+        capacity_variant: str,
+        unit_variant: str,
+        window_key: str,
+        window_label: str,
+    ) -> None:
+        super().__init__(
+            entry, window_key, window_label,
+            listen_soc_history=True,
+            listen_mileage_history=True,
+        )
+        self._soc_history = soc_history
+        self._mileage_history = mileage_history
+        self._capacity_kwh = capacity_kwh
+        self._capacity_variant = capacity_variant
+        self._unit_variant = unit_variant
+
+        unit_label, icon, precision = _unit_variant_props(unit_variant)
+        self._attr_native_unit_of_measurement = unit_label
+        self._attr_icon = icon
+        self._attr_suggested_display_precision = precision
+
+        self._attr_unique_id = (
+            f"{entry.entry_id}_avg_efficiency_"
+            f"{window_key}_{capacity_variant}_{unit_variant}"
+        )
+        self._attr_translation_key = (
+            f"avg_efficiency_{window_key}_{capacity_variant}_{unit_variant}"
+        )
+        self._attr_name = (
+            f"Average efficiency ({window_label.lower()}, "
+            f"{capacity_variant} capacity, {_human_unit(unit_variant)})"
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        consumed_pct = self._soc_history.consumed_since(cutoff)
+        distance_km = self._mileage_history.distance_since(cutoff)
+
+        value = _efficiency_value(
+            capacity_kwh=self._capacity_kwh,
+            soc_percent=consumed_pct,
+            distance_km=distance_km,
+            unit_variant=self._unit_variant,
+        )
+        if value is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = value
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        consumed_pct = self._soc_history.consumed_since(cutoff)
+        distance_km = self._mileage_history.distance_since(cutoff)
+        return {
+            "window": self._window_key,
+            "window_start": cutoff.isoformat(),
+            "capacity_variant": self._capacity_variant,
+            "unit_variant": self._unit_variant,
+            "capacity_kwh": self._capacity_kwh,
+            "soc_consumed_percent": (
+                round(consumed_pct, 2) if consumed_pct is not None else None
+            ),
+            "distance_km": (
+                round(distance_km, 1) if distance_km is not None else None
+            ),
+        }
