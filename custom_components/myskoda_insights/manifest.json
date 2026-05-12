@@ -1,0 +1,13 @@
+{
+  "domain": "myskoda_insights",
+  "name": "MySkoda Insights",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/yourusername/myskoda-insights",
+  "issue_tracker": "https://github.com/yourusername/myskoda-insights/issues",
+  "codeowners": ["@yourusername"],
+  "dependencies": [],
+  "requirements": [],
+  "iot_class": "calculated",
+  "integration_type": "service"
+}
