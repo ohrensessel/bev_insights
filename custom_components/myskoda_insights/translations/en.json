@@ -3,20 +3,32 @@
     "step": {
       "user": {
         "title": "MySkoda Insights",
-        "description": "Pick the MySkoda sensors to derive additional insights.",
+        "description": "Pick the MySkoda sensors and battery capacities used to derive additional insights.",
         "data": {
           "name": "Name",
           "soc_sensor": "Battery percentage (SoC) sensor",
-          "range_sensor": "Remaining electric range sensor"
+          "range_sensor": "Remaining electric range sensor",
+          "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
+          "capacity_actual_kwh": "Current remaining battery capacity (kWh)"
+        },
+        "data_description": {
+          "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
+          "capacity_actual_kwh": "Your battery's current real-world capacity in kWh. Update this periodically as the battery ages."
         }
       },
       "reconfigure": {
         "title": "MySkoda Insights",
-        "description": "Update the sensors used for the calculations.",
+        "description": "Update the sensors and capacity values used for the calculations.",
         "data": {
           "name": "Name",
           "soc_sensor": "Battery percentage (SoC) sensor",
-          "range_sensor": "Remaining electric range sensor"
+          "range_sensor": "Remaining electric range sensor",
+          "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
+          "capacity_actual_kwh": "Current remaining battery capacity (kWh)"
+        },
+        "data_description": {
+          "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
+          "capacity_actual_kwh": "Your battery's current real-world capacity in kWh. Update this periodically as the battery ages."
         }
       }
     },
@@ -29,6 +41,12 @@
     "sensor": {
       "full_battery_range": {
         "name": "Full battery range"
+      },
+      "efficiency_factory": {
+        "name": "Efficiency (factory capacity, kWh/100 km)"
+      },
+      "efficiency_actual": {
+        "name": "Efficiency (actual capacity, kWh/100 km)"
       }
     }
   }

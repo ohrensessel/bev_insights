@@ -9,9 +9,12 @@ from homeassistant import config_entries
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CAPACITY_ACTUAL,
+    CONF_CAPACITY_FACTORY,
     CONF_NAME,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
+    DEFAULT_CAPACITY_KWH,
     DEFAULT_NAME,
     DOMAIN,
 )
@@ -20,6 +23,18 @@ from .const import (
 def _sensor_selector() -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain="sensor")
+    )
+
+
+def _capacity_selector() -> selector.NumberSelector:
+    return selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1.0,
+            max=250.0,
+            step=0.1,
+            unit_of_measurement="kWh",
+            mode=selector.NumberSelectorMode.BOX,
+        )
     )
 
 
@@ -36,6 +51,14 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(
                 CONF_RANGE_SENSOR, default=defaults.get(CONF_RANGE_SENSOR)
             ): _sensor_selector(),
+            vol.Required(
+                CONF_CAPACITY_FACTORY,
+                default=defaults.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH),
+            ): _capacity_selector(),
+            vol.Required(
+                CONF_CAPACITY_ACTUAL,
+                default=defaults.get(CONF_CAPACITY_ACTUAL, DEFAULT_CAPACITY_KWH),
+            ): _capacity_selector(),
         }
     )
 
