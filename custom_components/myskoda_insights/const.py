@@ -18,12 +18,18 @@ DEFAULT_NAME = "MySkoda Insights"
 # this for their own vehicle.
 DEFAULT_CAPACITY_KWH = 77.0
 
-# Custom units for efficiency.
+# Custom units for efficiency. There's no standard HA unit constant for
+# energy-per-distance / distance-per-energy at this scale.
 UNIT_KWH_PER_100KM = "kWh/100 km"
+UNIT_KM_PER_KWH = "km/kWh"
 
 # Identifiers used inside unique_ids and translation keys for capacity variants
 VARIANT_FACTORY = "factory"
 VARIANT_ACTUAL = "actual"
+
+# Identifiers used inside unique_ids and translation keys for unit variants
+UNIT_VARIANT_KWH_PER_100KM = "kwh_per_100km"
+UNIT_VARIANT_KM_PER_KWH = "km_per_kwh"
 
 # Storage / dispatcher
 STORAGE_VERSION = 1

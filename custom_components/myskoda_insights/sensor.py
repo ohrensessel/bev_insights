@@ -49,7 +49,10 @@ from .const import (
     CONF_SOC_SENSOR,
     DEFAULT_CAPACITY_KWH,
     DOMAIN,
+    UNIT_KM_PER_KWH,
     UNIT_KWH_PER_100KM,
+    UNIT_VARIANT_KM_PER_KWH,
+    UNIT_VARIANT_KWH_PER_100KM,
     VARIANT_ACTUAL,
     VARIANT_FACTORY,
     signal_baseline_updated,
@@ -77,17 +80,22 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = [
         FullBatteryRangeSensor(entry, soc_entity, range_entity),
-        EfficiencySensor(
-            entry, soc_entity, range_entity,
-            capacity_kwh=capacity_factory,
-            capacity_variant=VARIANT_FACTORY,
-        ),
-        EfficiencySensor(
-            entry, soc_entity, range_entity,
-            capacity_kwh=capacity_actual,
-            capacity_variant=VARIANT_ACTUAL,
-        ),
     ]
+
+    # Efficiency: 2 capacities × 2 units = 4 sensors
+    for capacity_kwh, capacity_variant in (
+        (capacity_factory, VARIANT_FACTORY),
+        (capacity_actual, VARIANT_ACTUAL),
+    ):
+        for unit_variant in (UNIT_VARIANT_KWH_PER_100KM, UNIT_VARIANT_KM_PER_KWH):
+            entities.append(
+                EfficiencySensor(
+                    entry, soc_entity, range_entity,
+                    capacity_kwh=capacity_kwh,
+                    capacity_variant=capacity_variant,
+                    unit_variant=unit_variant,
+                )
+            )
 
     if tracker is not None:
         mileage_entity: str = data[CONF_MILEAGE_SENSOR]
@@ -95,20 +103,24 @@ async def async_setup_entry(
             MeasuredFullRangeSensor(entry, tracker, soc_entity, mileage_entity)
         )
         entities.append(LastChargedSensor(entry, tracker))
-        entities.append(
-            MeasuredEfficiencySensor(
-                entry, tracker, soc_entity, mileage_entity,
-                capacity_kwh=capacity_factory,
-                capacity_variant=VARIANT_FACTORY,
-            )
-        )
-        entities.append(
-            MeasuredEfficiencySensor(
-                entry, tracker, soc_entity, mileage_entity,
-                capacity_kwh=capacity_actual,
-                capacity_variant=VARIANT_ACTUAL,
-            )
-        )
+
+        # Measured efficiency: 2 capacities × 2 units = 4 sensors
+        for capacity_kwh, capacity_variant in (
+            (capacity_factory, VARIANT_FACTORY),
+            (capacity_actual, VARIANT_ACTUAL),
+        ):
+            for unit_variant in (
+                UNIT_VARIANT_KWH_PER_100KM,
+                UNIT_VARIANT_KM_PER_KWH,
+            ):
+                entities.append(
+                    MeasuredEfficiencySensor(
+                        entry, tracker, soc_entity, mileage_entity,
+                        capacity_kwh=capacity_kwh,
+                        capacity_variant=capacity_variant,
+                        unit_variant=unit_variant,
+                    )
+                )
 
     async_add_entities(entities)
 
@@ -215,16 +227,54 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
 # --------------------------------------------------------------------------- #
 
 
+# Shared helpers for all efficiency sensors.
+
+def _unit_variant_props(unit_variant: str) -> tuple[str, str, int]:
+    """Return (HA unit string, icon, suggested precision) per unit variant."""
+    if unit_variant == UNIT_VARIANT_KM_PER_KWH:
+        return UNIT_KM_PER_KWH, "mdi:speedometer", 2
+    return UNIT_KWH_PER_100KM, "mdi:lightning-bolt", 1
+
+
+def _human_unit(unit_variant: str) -> str:
+    """Friendly label used as the fallback entity name."""
+    if unit_variant == UNIT_VARIANT_KM_PER_KWH:
+        return "km/kWh"
+    return "kWh/100 km"
+
+
+def _efficiency_value(
+    capacity_kwh: float,
+    soc_percent: float | None,
+    distance_km: float | None,
+    unit_variant: str,
+) -> float | None:
+    """Compute one efficiency figure or return None for invalid inputs."""
+    if (
+        soc_percent is None
+        or distance_km is None
+        or soc_percent <= 0
+        or distance_km <= 0
+        or capacity_kwh <= 0
+    ):
+        return None
+
+    soc_percent = min(soc_percent, 100.0)
+    energy_kwh = capacity_kwh * soc_percent / 100.0
+
+    if unit_variant == UNIT_VARIANT_KM_PER_KWH:
+        return round(distance_km / energy_kwh, 3)
+    return round(energy_kwh / distance_km * 100.0, 2)
+
+
 class EfficiencySensor(MySkodaDerivedSensor):
     """Implied driving efficiency derived from the car's range prediction.
 
-        kWh/100 km = capacity * soc / range_km
+    Instantiated four times per config entry:
+    {factory, actual} capacity × {kWh/100 km, km/kWh}.
     """
 
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UNIT_KWH_PER_100KM
-    _attr_icon = "mdi:lightning-bolt"
-    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
@@ -233,43 +283,52 @@ class EfficiencySensor(MySkodaDerivedSensor):
         range_entity: str,
         capacity_kwh: float,
         capacity_variant: str,
+        unit_variant: str,
     ) -> None:
         super().__init__(entry, [soc_entity, range_entity])
         self._soc_entity = soc_entity
         self._range_entity = range_entity
         self._capacity_kwh = capacity_kwh
         self._capacity_variant = capacity_variant
+        self._unit_variant = unit_variant
 
-        self._attr_unique_id = f"{entry.entry_id}_efficiency_{capacity_variant}"
-        self._attr_translation_key = f"efficiency_{capacity_variant}"
-        self._attr_name = f"Efficiency ({capacity_variant} capacity, kWh/100 km)"
+        unit_label, icon, precision = _unit_variant_props(unit_variant)
+        self._attr_native_unit_of_measurement = unit_label
+        self._attr_icon = icon
+        self._attr_suggested_display_precision = precision
+
+        self._attr_unique_id = (
+            f"{entry.entry_id}_efficiency_{capacity_variant}_{unit_variant}"
+        )
+        self._attr_translation_key = (
+            f"efficiency_{capacity_variant}_{unit_variant}"
+        )
+        self._attr_name = (
+            f"Efficiency ({capacity_variant} capacity, {_human_unit(unit_variant)})"
+        )
 
     @callback
     def _recalculate(self) -> None:
         soc = read_float(self.hass, self._soc_entity)
         current_range = read_distance_km(self.hass, self._range_entity)
-
-        if (
-            soc is None
-            or current_range is None
-            or soc <= 0
-            or current_range <= 0
-            or self._capacity_kwh <= 0
-        ):
+        value = _efficiency_value(
+            capacity_kwh=self._capacity_kwh,
+            soc_percent=soc,
+            distance_km=current_range,
+            unit_variant=self._unit_variant,
+        )
+        if value is None:
             self._attr_available = False
             self._attr_native_value = None
             return
-
-        soc = min(soc, 100.0)
         self._attr_available = True
-        self._attr_native_value = round(
-            self._capacity_kwh * soc / current_range, 2
-        )
+        self._attr_native_value = value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "capacity_variant": self._capacity_variant,
+            "unit_variant": self._unit_variant,
             "capacity_kwh": self._capacity_kwh,
             "soc_source": self._soc_entity,
             "range_source": self._range_entity,
@@ -282,11 +341,7 @@ class EfficiencySensor(MySkodaDerivedSensor):
 
 
 class _TrackerLinkedMixin:
-    """Adds a subscription to baseline-updated dispatcher signals.
-
-    Mixin used by sensors that need to recompute when the ChargeTracker
-    writes a new baseline.
-    """
+    """Adds a subscription to baseline-updated dispatcher signals."""
 
     _entry: ConfigEntry
 
@@ -449,13 +504,11 @@ class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
     """Implied efficiency from real driving since the last charge end.
 
-        kWh/100 km = capacity * soc_consumed / distance_km
+    Like EfficiencySensor, instantiated four times per config entry:
+    {factory, actual} capacity × {kWh/100 km, km/kWh}.
     """
 
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UNIT_KWH_PER_100KM
-    _attr_icon = "mdi:lightning-bolt"
-    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
@@ -465,6 +518,7 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         mileage_entity: str,
         capacity_kwh: float,
         capacity_variant: str,
+        unit_variant: str,
     ) -> None:
         super().__init__(entry, [soc_entity, mileage_entity])
         self._tracker = tracker
@@ -472,13 +526,23 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         self._mileage_entity = mileage_entity
         self._capacity_kwh = capacity_kwh
         self._capacity_variant = capacity_variant
+        self._unit_variant = unit_variant
+
+        unit_label, icon, precision = _unit_variant_props(unit_variant)
+        self._attr_native_unit_of_measurement = unit_label
+        self._attr_icon = icon
+        self._attr_suggested_display_precision = precision
 
         self._attr_unique_id = (
-            f"{entry.entry_id}_measured_efficiency_{capacity_variant}"
+            f"{entry.entry_id}_measured_efficiency_"
+            f"{capacity_variant}_{unit_variant}"
         )
-        self._attr_translation_key = f"measured_efficiency_{capacity_variant}"
+        self._attr_translation_key = (
+            f"measured_efficiency_{capacity_variant}_{unit_variant}"
+        )
         self._attr_name = (
-            f"Measured efficiency ({capacity_variant} capacity, kWh/100 km)"
+            f"Measured efficiency ({capacity_variant} capacity, "
+            f"{_human_unit(unit_variant)})"
         )
 
     async def async_added_to_hass(self) -> None:
@@ -511,16 +575,19 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         distance_km = current_mileage - baseline_mileage
         soc_consumed = baseline_soc - current_soc
 
-        if distance_km <= 0 or soc_consumed <= 0 or self._capacity_kwh <= 0:
+        value = _efficiency_value(
+            capacity_kwh=self._capacity_kwh,
+            soc_percent=soc_consumed,
+            distance_km=distance_km,
+            unit_variant=self._unit_variant,
+        )
+        if value is None:
             self._attr_available = False
             self._attr_native_value = None
             return
 
-        soc_consumed = min(soc_consumed, 100.0)
         self._attr_available = True
-        self._attr_native_value = round(
-            self._capacity_kwh * soc_consumed / distance_km, 2
-        )
+        self._attr_native_value = value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -530,6 +597,7 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 
         attrs: dict[str, Any] = {
             "capacity_variant": self._capacity_variant,
+            "unit_variant": self._unit_variant,
             "capacity_kwh": self._capacity_kwh,
             "baseline_mileage_km": baseline.get(BASELINE_MILEAGE_KM),
             "baseline_soc_percent": baseline.get(BASELINE_SOC_PERCENT),

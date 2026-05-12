@@ -50,20 +50,32 @@
       "full_battery_range": {
         "name": "Full battery range"
       },
-      "efficiency_factory": {
+      "efficiency_factory_kwh_per_100km": {
         "name": "Efficiency (factory capacity, kWh/100 km)"
       },
-      "efficiency_actual": {
+      "efficiency_factory_km_per_kwh": {
+        "name": "Efficiency (factory capacity, km/kWh)"
+      },
+      "efficiency_actual_kwh_per_100km": {
         "name": "Efficiency (actual capacity, kWh/100 km)"
+      },
+      "efficiency_actual_km_per_kwh": {
+        "name": "Efficiency (actual capacity, km/kWh)"
       },
       "measured_full_range": {
         "name": "Measured full range"
       },
-      "measured_efficiency_factory": {
+      "measured_efficiency_factory_kwh_per_100km": {
         "name": "Measured efficiency (factory capacity, kWh/100 km)"
       },
-      "measured_efficiency_actual": {
+      "measured_efficiency_factory_km_per_kwh": {
+        "name": "Measured efficiency (factory capacity, km/kWh)"
+      },
+      "measured_efficiency_actual_kwh_per_100km": {
         "name": "Measured efficiency (actual capacity, kWh/100 km)"
+      },
+      "measured_efficiency_actual_km_per_kwh": {
+        "name": "Measured efficiency (actual capacity, km/kWh)"
       },
       "last_charged": {
         "name": "Last charged"
