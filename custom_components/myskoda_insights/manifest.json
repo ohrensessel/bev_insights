@@ -1,7 +1,7 @@
 {
   "domain": "myskoda_insights",
   "name": "MySkoda Insights",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "config_flow": true,
   "documentation": "https://github.com/yourusername/myskoda-insights",
   "issue_tracker": "https://github.com/yourusername/myskoda-insights/issues",

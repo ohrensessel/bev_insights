@@ -12,7 +12,7 @@ the baseline is updated.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -34,7 +34,10 @@ from homeassistant.core import (
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -56,8 +59,9 @@ from .const import (
     VARIANT_ACTUAL,
     VARIANT_FACTORY,
     signal_baseline_updated,
+    signal_mileage_history_updated,
 )
-from .tracker import ChargeTracker
+from .tracker import ChargeTracker, MileageHistory
 from .util import read_distance_km, read_float
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +76,7 @@ async def async_setup_entry(
     domain_data = hass.data[DOMAIN][entry.entry_id]
     data = domain_data["data"]
     tracker: ChargeTracker | None = domain_data.get("tracker")
+    mileage_history: MileageHistory | None = domain_data.get("mileage_history")
 
     soc_entity: str = data[CONF_SOC_SENSOR]
     range_entity: str = data[CONF_RANGE_SENSOR]
@@ -121,6 +126,16 @@ async def async_setup_entry(
                         unit_variant=unit_variant,
                     )
                 )
+
+    if mileage_history is not None:
+        entities.append(
+            DistanceRolling7DaysSensor(entry, mileage_history)
+        )
+        entities.append(
+            DistanceThisWeekSensor(
+                entry, mileage_history, data[CONF_MILEAGE_SENSOR]
+            )
+        )
 
     async_add_entities(entities)
 
@@ -617,4 +632,148 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
             attrs["soc_consumed_since_last_charge_percent"] = round(
                 baseline[BASELINE_SOC_PERCENT] - current_soc, 1
             )
+        return attrs
+
+
+# --------------------------------------------------------------------------- #
+# Mileage-history sensors                                                     #
+# --------------------------------------------------------------------------- #
+
+
+def _local_week_start(now_utc: datetime, hass: HomeAssistant) -> datetime:
+    """Return the local Monday 00:00 of the week containing `now_utc`, in UTC."""
+    local_tz = dt_util.get_time_zone(hass.config.time_zone) or dt_util.UTC
+    local = now_utc.astimezone(local_tz)
+    monday_local = local - timedelta(days=local.weekday())
+    monday_local = monday_local.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return monday_local.astimezone(dt_util.UTC)
+
+
+class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
+    """Kilometres driven in the trailing 7 days (rolling window)."""
+
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
+    _attr_icon = "mdi:calendar-week"
+    _attr_suggested_display_precision = 1
+    _attr_translation_key = "distance_rolling_7_days"
+
+    def __init__(
+        self, entry: ConfigEntry, mileage_history: MileageHistory
+    ) -> None:
+        super().__init__(entry, source_entities=[])
+        self._mileage_history = mileage_history
+        self._attr_unique_id = f"{entry.entry_id}_distance_rolling_7_days"
+        self._attr_name = "Distance driven (rolling 7 days)"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _on_history_update() -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_mileage_history_updated(self._entry.entry_id),
+                _on_history_update,
+            )
+        )
+
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass, _on_history_update, minute=0, second=0
+            )
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        cutoff = dt_util.utcnow() - timedelta(days=7)
+        distance = self._mileage_history.distance_since(cutoff)
+        if distance is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = round(distance, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        oldest = self._mileage_history.oldest_sample
+        attrs: dict[str, Any] = {"window": "rolling_7_days"}
+        if oldest is not None:
+            attrs["oldest_sample_timestamp"] = oldest[0].isoformat()
+            attrs["oldest_sample_mileage_km"] = oldest[1]
+        return attrs
+
+
+class DistanceThisWeekSensor(MySkodaDerivedSensor):
+    """Kilometres driven since local Monday 00:00 (calendar week)."""
+
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
+    _attr_icon = "mdi:calendar-today"
+    _attr_suggested_display_precision = 1
+    _attr_translation_key = "distance_this_week"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        mileage_history: MileageHistory,
+        mileage_entity: str,
+    ) -> None:
+        super().__init__(entry, source_entities=[mileage_entity])
+        self._mileage_history = mileage_history
+        self._mileage_entity = mileage_entity
+        self._attr_unique_id = f"{entry.entry_id}_distance_this_week"
+        self._attr_name = "Distance driven (this week)"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _midnight_tick(now: datetime) -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass, _midnight_tick, hour=0, minute=0, second=0
+            )
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        week_start = _local_week_start(dt_util.utcnow(), self.hass)
+        distance = self._mileage_history.distance_since(week_start)
+        if distance is None:
+            oldest = self._mileage_history.oldest_sample
+            current = read_distance_km(self.hass, self._mileage_entity)
+            if oldest is None or current is None:
+                self._attr_available = False
+                self._attr_native_value = None
+                return
+            distance = max(0.0, current - oldest[1])
+        self._attr_available = True
+        self._attr_native_value = round(distance, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        week_start = _local_week_start(dt_util.utcnow(), self.hass)
+        oldest = self._mileage_history.oldest_sample
+        attrs: dict[str, Any] = {
+            "window": "calendar_week",
+            "week_start": week_start.isoformat(),
+        }
+        if oldest is not None and oldest[0] > week_start:
+            attrs["partial_week_data"] = True
+            attrs["oldest_sample_timestamp"] = oldest[0].isoformat()
+        else:
+            attrs["partial_week_data"] = False
         return attrs

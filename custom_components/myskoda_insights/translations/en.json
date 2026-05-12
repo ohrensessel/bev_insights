@@ -79,6 +79,12 @@
       },
       "last_charged": {
         "name": "Last charged"
+      },
+      "distance_rolling_7_days": {
+        "name": "Distance driven (rolling 7 days)"
+      },
+      "distance_this_week": {
+        "name": "Distance driven (this week)"
       }
     }
   }
