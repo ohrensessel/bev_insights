@@ -34,8 +34,13 @@ from .const import (
     BASELINE_MILEAGE_KM,
     BASELINE_SOC_PERCENT,
     BASELINE_TIMESTAMP,
+    LAST_SESSION_KEY,
     MILEAGE_HISTORY_DAYS,
     MILEAGE_HISTORY_KEY_PREFIX,
+    SESSION_END_SOC_PERCENT,
+    SESSION_END_TIMESTAMP,
+    SESSION_START_SOC_PERCENT,
+    SESSION_START_TIMESTAMP,
     SOC_HISTORY_DAYS,
     SOC_HISTORY_KEY_PREFIX,
     STORAGE_KEY_PREFIX,
@@ -69,6 +74,14 @@ class ChargeTracker:
             hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{entry.entry_id}"
         )
         self._baseline: dict[str, Any] | None = None
+        # Most recently completed charging session (set on the falling edge
+        # when we have a matching rising-edge sample). Persisted.
+        self._last_session: dict[str, Any] | None = None
+        # In-memory only: SoC + timestamp captured on the rising edge of the
+        # current charging session. Cleared when the session ends or HA
+        # restarts mid-charge (in which case that one cycle won't produce a
+        # complete `last_session`).
+        self._pending_start: dict[str, Any] | None = None
         self._unsub: callable | None = None
 
     # ------------------------------------------------------------------ #
@@ -76,15 +89,24 @@ class ChargeTracker:
     # ------------------------------------------------------------------ #
 
     async def async_load(self) -> None:
-        """Load persisted baseline from disk, if any."""
+        """Load persisted baseline + last_session from disk, if any."""
         data = await self._store.async_load()
-        if isinstance(data, dict) and BASELINE_MILEAGE_KM in data:
-            self._baseline = data
+        if not isinstance(data, dict):
+            return
+        if BASELINE_MILEAGE_KM in data:
+            self._baseline = {
+                BASELINE_MILEAGE_KM: data[BASELINE_MILEAGE_KM],
+                BASELINE_SOC_PERCENT: data.get(BASELINE_SOC_PERCENT),
+                BASELINE_TIMESTAMP: data.get(BASELINE_TIMESTAMP),
+            }
             _LOGGER.debug(
                 "Loaded charge-end baseline for %s: %s",
                 self.entry.entry_id,
                 self._baseline,
             )
+        last_session = data.get(LAST_SESSION_KEY)
+        if isinstance(last_session, dict):
+            self._last_session = last_session
 
     @callback
     def async_start(self) -> None:
@@ -110,6 +132,16 @@ class ChargeTracker:
         """Return the persisted baseline dict, or None if never charged."""
         return self._baseline
 
+    @property
+    def last_session(self) -> dict[str, Any] | None:
+        """Return the most recent completed charge session, or None.
+
+        Populated only when a full off→on→off cycle has been observed.
+        Contains `start_soc_percent`, `end_soc_percent`, `start_timestamp`,
+        `end_timestamp`.
+        """
+        return self._last_session
+
     # ------------------------------------------------------------------ #
     # State-change handling                                              #
     # ------------------------------------------------------------------ #
@@ -118,11 +150,37 @@ class ChargeTracker:
     def _on_charging_state_changed(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """Capture baseline on the trailing edge of a charging session."""
+        """React to charging-state transitions.
+
+        Rising edge (off → on) → record start SoC for "kWh added".
+        Falling edge (on → off) → capture the end baseline and finalise
+        the completed session.
+        """
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
-        if is_charging(old_state) and not is_charging(new_state):
+        was_charging = is_charging(old_state)
+        is_now_charging = is_charging(new_state)
+        if not was_charging and is_now_charging:
+            self._capture_pending_start()
+        elif was_charging and not is_now_charging:
             self._capture_baseline()
+
+    @callback
+    def _capture_pending_start(self) -> None:
+        """Record SoC + timestamp at the start of a charge session."""
+        soc = read_float(self.hass, self._soc_entity)
+        if soc is None:
+            _LOGGER.debug(
+                "Charge start detected but SoC unavailable; "
+                "last-charge-added will be unavailable for this cycle"
+            )
+            self._pending_start = None
+            return
+        self._pending_start = {
+            SESSION_START_SOC_PERCENT: soc,
+            SESSION_START_TIMESTAMP: dt_util.utcnow().isoformat(),
+        }
+        _LOGGER.info("Charge start captured at %.1f%% SoC", soc)
 
     @callback
     def _capture_baseline(self) -> None:
@@ -138,19 +196,46 @@ class ChargeTracker:
             )
             return
 
+        end_ts = dt_util.utcnow().isoformat()
         self._baseline = {
             BASELINE_MILEAGE_KM: mileage,
             BASELINE_SOC_PERCENT: soc,
-            BASELINE_TIMESTAMP: dt_util.utcnow().isoformat(),
+            BASELINE_TIMESTAMP: end_ts,
         }
         _LOGGER.info(
             "Charge end captured: %.1f km @ %.1f%% SoC", mileage, soc
         )
 
-        self.hass.async_create_task(self._store.async_save(self._baseline))
+        # If we observed the rising edge of this session, finalise it as a
+        # complete `last_session` so the "kWh added" sensors can read it.
+        if self._pending_start is not None:
+            self._last_session = {
+                SESSION_START_SOC_PERCENT: self._pending_start[
+                    SESSION_START_SOC_PERCENT
+                ],
+                SESSION_START_TIMESTAMP: self._pending_start[
+                    SESSION_START_TIMESTAMP
+                ],
+                SESSION_END_SOC_PERCENT: soc,
+                SESSION_END_TIMESTAMP: end_ts,
+            }
+            self._pending_start = None
+
+        self.hass.async_create_task(self._store.async_save(self._persisted_payload()))
         async_dispatcher_send(
             self.hass, signal_baseline_updated(self.entry.entry_id)
         )
+
+    def _persisted_payload(self) -> dict[str, Any]:
+        """Build the dict written to Store.
+
+        Baseline keys sit at the top level (backwards-compatible with v0.7
+        on-disk format); the completed session goes under `last_session`.
+        """
+        payload: dict[str, Any] = dict(self._baseline or {})
+        if self._last_session is not None:
+            payload[LAST_SESSION_KEY] = self._last_session
+        return payload
 
 
 class EntityHistory:

@@ -80,6 +80,12 @@
       "last_charged": {
         "name": "Last charged"
       },
+      "last_charge_added_factory": {
+        "name": "Last charge added (factory capacity)"
+      },
+      "last_charge_added_actual": {
+        "name": "Last charge added (actual capacity)"
+      },
       "distance_rolling_7_days": {
         "name": "Distance driven (rolling 7 days)"
       },

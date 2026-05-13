@@ -66,3 +66,12 @@ def signal_soc_history_updated(entry_id: str) -> str:
 BASELINE_MILEAGE_KM = "mileage_km"
 BASELINE_SOC_PERCENT = "soc_percent"
 BASELINE_TIMESTAMP = "timestamp"
+
+# Last-completed-charge-session keys. Stored alongside the baseline in the
+# same Store payload (so adding them doesn't break v0.7 baseline files —
+# old files just lack the "last_session" key).
+LAST_SESSION_KEY = "last_session"
+SESSION_START_SOC_PERCENT = "start_soc_percent"
+SESSION_END_SOC_PERCENT = "end_soc_percent"
+SESSION_START_TIMESTAMP = "start_timestamp"
+SESSION_END_TIMESTAMP = "end_timestamp"

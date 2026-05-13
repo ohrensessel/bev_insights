@@ -4,6 +4,24 @@ All notable changes to MySkoda Insights are documented here. Format
 loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0]
+
+### Added
+- **Last charge added sensors:** two new entities (factory and actual
+  capacity), each reporting the kWh delivered during the most recently
+  completed charging session. Computed as
+  `capacity * (end_soc - start_soc) / 100`. Negative deltas clamp to 0.
+- `ChargeTracker` now also captures SoC + timestamp on the **rising**
+  edge of a charging session. Combined with the existing falling-edge
+  capture, a full off→on→off cycle is persisted as `last_session`
+  alongside the existing baseline.
+
+### Changed
+- On-disk format for the tracker store gains an optional `last_session`
+  top-level key. v0.7 payloads load unchanged (no migration needed); the
+  new key is written from the next completed cycle onward.
+- Total sensor count per fully-wired config entry: **25 → 27**.
+
 ## [0.7.0]
 
 ### Changed

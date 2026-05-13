@@ -144,6 +144,35 @@ async def test_measured_full_range_after_charge_end(hass: HomeAssistant) -> None
     assert float(eff.state) == pytest.approx(15.4, rel=1e-3)
 
 
+async def test_last_charge_added_unavailable_without_session(
+    hass: HomeAssistant,
+) -> None:
+    await _setup_full(hass)
+    state = _find_state(hass, "_last_charge_added_factory")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_last_charge_added_after_cycle(hass: HomeAssistant) -> None:
+    """Drive a full off→on→off cycle and check the kWh formula."""
+    await _setup_full(hass)
+    # Start of session at 30% SoC.
+    hass.states.async_set(SOC_ENTITY, "30")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    # End of session at 80% SoC.
+    hass.states.async_set(SOC_ENTITY, "80")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # Factory: 77 kWh × 50% = 38.5 kWh
+    factory = _find_state(hass, "_last_charge_added_factory")
+    assert float(factory.state) == pytest.approx(38.5)
+    # Actual: 70 kWh × 50% = 35.0 kWh
+    actual = _find_state(hass, "_last_charge_added_actual")
+    assert float(actual.state) == pytest.approx(35.0)
+
+
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #

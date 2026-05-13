@@ -51,6 +51,10 @@ from .const import (
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
     DOMAIN,
+    SESSION_END_SOC_PERCENT,
+    SESSION_END_TIMESTAMP,
+    SESSION_START_SOC_PERCENT,
+    SESSION_START_TIMESTAMP,
     UNIT_KM_PER_KWH,
     UNIT_KWH_PER_100KM,
     UNIT_VARIANT_KM_PER_KWH,
@@ -117,6 +121,20 @@ async def async_setup_entry(
             )
         )
         entities.append(LastChargedSensor(entry, tracker))
+
+        # Last charge added (kWh): one per capacity variant.
+        for capacity, capacity_variant in (
+            (capacity_factory, VARIANT_FACTORY),
+            (capacity_actual, VARIANT_ACTUAL),
+        ):
+            entities.append(
+                LastChargeAddedSensor(
+                    entry,
+                    tracker,
+                    capacity=capacity,
+                    capacity_variant=capacity_variant,
+                )
+            )
 
         # Measured efficiency: 2 capacities × 2 units = 4 sensors
         for capacity, capacity_variant in (
@@ -635,6 +653,80 @@ class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         return {
             "mileage_km": baseline.get(BASELINE_MILEAGE_KM),
             "soc_percent": baseline.get(BASELINE_SOC_PERCENT),
+        }
+
+
+class LastChargeAddedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+    """Energy added during the most recently completed charge session.
+
+        kWh_added = capacity * (end_soc - start_soc) / 100
+
+    Available once a full off→on→off cycle has been observed. Negative
+    deltas (battery somehow dropping during charge — API quirks) clamp to 0.
+    Instantiated once per capacity variant.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:battery-plus-variant"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        tracker: ChargeTracker,
+        capacity: CapacitySource,
+        capacity_variant: str,
+    ) -> None:
+        sources = []
+        if capacity.source_entity:
+            sources.append(capacity.source_entity)
+        super().__init__(entry, sources)
+        self._tracker = tracker
+        self._capacity = capacity
+        self._capacity_variant = capacity_variant
+        self._attr_unique_id = (
+            f"{entry.entry_id}_last_charge_added_{capacity_variant}"
+        )
+        self._attr_translation_key = f"last_charge_added_{capacity_variant}"
+        self._attr_name = f"Last charge added ({capacity_variant} capacity)"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+    @callback
+    def _recalculate(self) -> None:
+        session = self._tracker.last_session
+        capacity_kwh = self._capacity.current()
+        if session is None or capacity_kwh is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        start_soc = session.get(SESSION_START_SOC_PERCENT)
+        end_soc = session.get(SESSION_END_SOC_PERCENT)
+        if start_soc is None or end_soc is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        soc_delta = max(0.0, end_soc - start_soc)
+        self._attr_available = True
+        self._attr_native_value = round(capacity_kwh * soc_delta / 100.0, 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        session = self._tracker.last_session or {}
+        return {
+            "capacity_variant": self._capacity_variant,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
+            "start_soc_percent": session.get(SESSION_START_SOC_PERCENT),
+            "end_soc_percent": session.get(SESSION_END_SOC_PERCENT),
+            "start_timestamp": session.get(SESSION_START_TIMESTAMP),
+            "end_timestamp": session.get(SESSION_END_TIMESTAMP),
         }
 
 
