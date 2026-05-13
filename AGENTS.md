@@ -25,6 +25,26 @@ python -m py_compile custom_components/myskoda_insights/*.py
 CI (`.github/workflows/tests.yml`) runs three jobs in parallel:
 `lint` (ruff), `mypy`, and `pytest` (3.12 + 3.13 matrix).
 
+## Deploying to Home Assistant
+
+Manual deploy from Gitea Actions via SSH/rsync — workflow at
+`.gitea/workflows/deploy-to-ha.yml`, triggered from the Gitea UI
+(`Actions → deploy-to-ha → Run workflow`). Does **not** restart HA;
+do that yourself after verifying the diff in `/config/`.
+
+Required Gitea Actions secrets (Repo settings → Actions → Secrets):
+
+| Secret | Notes |
+|---|---|
+| `HA_HOST` | Host or IP of the HA instance. |
+| `HA_USER` | SSH user — typically `root` for the HA `SSH & Web Terminal` add-on. |
+| `HA_SSH_PORT` | Optional; defaults to `22`. The HA SSH add-on often uses a non-standard port. |
+| `HA_SSH_KEY` | Full private key (including `BEGIN`/`END` lines). Authorize the matching public key on the SSH add-on. |
+
+The deploy rsyncs `custom_components/myskoda_insights/` into
+`/config/custom_components/myskoda_insights/`, with `--delete` and
+`__pycache__/*.pyc` excluded.
+
 ## Code map
 
 | File | Responsibility |

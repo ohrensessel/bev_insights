@@ -1,0 +1,51 @@
+name: deploy-to-ha
+
+# Manually-triggered deploy. Rsyncs custom_components/myskoda_insights/
+# into /config/custom_components/ on the Home Assistant host over SSH.
+# Does NOT restart HA — restart manually after verifying the diff.
+#
+# Required Gitea Actions secrets (Repo settings → Actions → Secrets):
+#   HA_HOST       — host or IP of the HA instance (e.g. 192.168.x.x)
+#   HA_USER       — SSH user (typically `root` for the HA SSH add-on)
+#   HA_SSH_PORT   — SSH port (optional; defaults to 22)
+#   HA_SSH_KEY    — full private key, including BEGIN/END lines.
+#                   Authorize the matching public key on the HA SSH add-on.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          HA_HOST: ${{ secrets.HA_HOST }}
+          HA_SSH_PORT: ${{ secrets.HA_SSH_PORT }}
+          HA_SSH_KEY: ${{ secrets.HA_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$HA_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${HA_SSH_PORT:-22}" "$HA_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync integration to HA
+        env:
+          HA_HOST: ${{ secrets.HA_HOST }}
+          HA_USER: ${{ secrets.HA_USER }}
+          HA_SSH_PORT: ${{ secrets.HA_SSH_PORT }}
+        run: |
+          rsync -avz --delete \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            -e "ssh -i ~/.ssh/deploy_key -p ${HA_SSH_PORT:-22}" \
+            custom_components/myskoda_insights/ \
+            "${HA_USER}@${HA_HOST}:/config/custom_components/myskoda_insights/"
+
+      - name: Summary
+        run: |
+          echo "Deployed custom_components/myskoda_insights to ${{ secrets.HA_HOST }}:/config/custom_components/" >> "$GITHUB_STEP_SUMMARY"
+          echo "Restart HA manually to pick up the new code." >> "$GITHUB_STEP_SUMMARY"
