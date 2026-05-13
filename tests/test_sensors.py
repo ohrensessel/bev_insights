@@ -144,6 +144,53 @@ async def test_measured_full_range_after_charge_end(hass: HomeAssistant) -> None
     assert float(eff.state) == pytest.approx(15.4, rel=1e-3)
 
 
+async def test_state_of_health_formula(hass: HomeAssistant) -> None:
+    """SoH = actual / factory × 100. With factory=77, actual=70 → 90.9%."""
+    await _setup_full(hass)
+    state = _find_state(hass, "_state_of_health")
+    assert float(state.state) == pytest.approx(70.0 / 77.0 * 100.0, rel=1e-3)
+
+
+async def test_state_of_health_updates_live(hass: HomeAssistant) -> None:
+    await _setup_full(hass)
+    hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "60.0")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_state_of_health")
+    # 60 / 77 ≈ 77.9 %
+    assert float(state.state) == pytest.approx(60.0 / 77.0 * 100.0, rel=1e-3)
+
+
+async def test_state_of_health_unavailable_when_capacity_missing(
+    hass: HomeAssistant,
+) -> None:
+    await _setup_full(hass)
+    hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "unavailable")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_state_of_health")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_time_since_last_charge_unavailable_without_baseline(
+    hass: HomeAssistant,
+) -> None:
+    await _setup_full(hass)
+    state = _find_state(hass, "_time_since_last_charge")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_time_since_last_charge_after_charge_end(hass: HomeAssistant) -> None:
+    """Right after a charge end the sensor reads ~0 hours."""
+    await _setup_full(hass)
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    state = _find_state(hass, "_time_since_last_charge")
+    # Just charged → elapsed ≈ 0 hours.
+    assert float(state.state) == pytest.approx(0.0, abs=0.01)
+
+
 async def test_last_charge_added_unavailable_without_session(
     hass: HomeAssistant,
 ) -> None:

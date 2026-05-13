@@ -4,6 +4,21 @@ All notable changes to MySkoda Insights are documented here. Format
 loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0]
+
+### Added
+- **State of Health sensor:** `actual / factory × 100` (%). Single
+  value per entry — no unit/capacity doubling. Recomputes whenever
+  the actual-capacity helper changes.
+- **Time since last charge sensor:** hours elapsed since the most
+  recent charge end (`DURATION` device class, unit `h`). Ticks once an
+  hour so dashboards and automations can read it directly without a
+  template sensor — useful for rules like "notify if not charged in 5
+  days".
+
+### Changed
+- Total sensor count per fully-wired config entry: **27 → 29**.
+
 ## [0.8.0]
 
 ### Added

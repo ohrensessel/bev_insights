@@ -22,9 +22,11 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    PERCENTAGE,
     EntityCategory,
     UnitOfEnergy,
     UnitOfLength,
+    UnitOfTime,
 )
 from homeassistant.core import (
     Event,
@@ -90,6 +92,7 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = [
         FullBatteryRangeSensor(entry, soc_entity, range_entity),
+        StateOfHealthSensor(entry, capacity_factory, capacity_actual),
     ]
 
     # Efficiency: 2 capacities × 2 units = 4 sensors
@@ -121,6 +124,7 @@ async def async_setup_entry(
             )
         )
         entities.append(LastChargedSensor(entry, tracker))
+        entities.append(TimeSinceLastChargeSensor(entry, tracker))
 
         # Last charge added (kWh): one per capacity variant.
         for capacity, capacity_variant in (
@@ -329,6 +333,57 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
             "current_range_km": read_distance_km(
                 self.hass, self._range_entity
             ),
+        }
+
+
+class StateOfHealthSensor(MySkodaDerivedSensor):
+    """Battery health as a percentage of nameplate capacity.
+
+        state_of_health = actual / factory * 100
+
+    Single sensor per entry — no unit or capacity variants. Recomputes
+    whenever the actual-capacity source entity changes.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:battery-heart-variant"
+    _attr_suggested_display_precision = 1
+    _attr_translation_key = "state_of_health"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        capacity_factory: CapacitySource,
+        capacity_actual: CapacitySource,
+    ) -> None:
+        sources: list[str] = []
+        for cap in (capacity_factory, capacity_actual):
+            if cap.source_entity:
+                sources.append(cap.source_entity)
+        super().__init__(entry, sources)
+        self._capacity_factory = capacity_factory
+        self._capacity_actual = capacity_actual
+        self._attr_unique_id = f"{entry.entry_id}_state_of_health"
+        self._attr_name = "State of Health"
+
+    @callback
+    def _recalculate(self) -> None:
+        factory = self._capacity_factory.current()
+        actual = self._capacity_actual.current()
+        if factory is None or actual is None or factory <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = round(actual / factory * 100.0, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "capacity_factory_kwh": self._capacity_factory.current(),
+            "capacity_actual_kwh": self._capacity_actual.current(),
+            "capacity_actual_source": self._capacity_actual.describe(),
         }
 
 
@@ -653,6 +708,70 @@ class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         return {
             "mileage_km": baseline.get(BASELINE_MILEAGE_KM),
             "soc_percent": baseline.get(BASELINE_SOC_PERCENT),
+        }
+
+
+class TimeSinceLastChargeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+    """Hours elapsed since the most recent charge end.
+
+    Ticks once an hour so dashboards/automations don't need a template
+    sensor to compute "days since charge". Resets toward zero whenever
+    a new charge ends and the baseline updates.
+    """
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_icon = "mdi:timer-sand"
+    _attr_suggested_display_precision = 1
+    _attr_translation_key = "time_since_last_charge"
+
+    def __init__(self, entry: ConfigEntry, tracker: ChargeTracker) -> None:
+        super().__init__(entry, source_entities=[])
+        self._tracker = tracker
+        self._attr_unique_id = f"{entry.entry_id}_time_since_last_charge"
+        self._attr_name = "Time since last charge"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+        @callback
+        def _tick(_=None) -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        # Hourly tick so the value advances even when nothing else changes.
+        self.async_on_remove(
+            async_track_time_change(self.hass, _tick, minute=0, second=0)
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        baseline = self._tracker.baseline
+        if baseline is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        ts_str = baseline.get(BASELINE_TIMESTAMP)
+        if not ts_str:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        ts = dt_util.parse_datetime(ts_str)
+        if ts is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        elapsed_hours = (dt_util.utcnow() - ts).total_seconds() / 3600.0
+        self._attr_available = True
+        self._attr_native_value = round(max(0.0, elapsed_hours), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        baseline = self._tracker.baseline or {}
+        return {
+            "last_charge_timestamp": baseline.get(BASELINE_TIMESTAMP),
         }
 
 

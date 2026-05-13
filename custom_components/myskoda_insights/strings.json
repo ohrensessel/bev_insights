@@ -50,6 +50,12 @@
       "full_battery_range": {
         "name": "Full battery range"
       },
+      "state_of_health": {
+        "name": "State of Health"
+      },
+      "time_since_last_charge": {
+        "name": "Time since last charge"
+      },
       "efficiency_factory_kwh_per_100km": {
         "name": "Efficiency (factory capacity, kWh/100 km)"
       },
