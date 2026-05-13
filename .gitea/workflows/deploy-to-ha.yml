@@ -1,7 +1,9 @@
 name: deploy-to-ha
 
 # Manually-triggered deploy. Rsyncs custom_components/myskoda_insights/
-# into /config/custom_components/ on the Home Assistant host over SSH.
+# into /homeassistant/custom_components/ on the Home Assistant host
+# over SSH (the path the Advanced SSH & Web Terminal add-on mounts the
+# config dir at; the official SSH add-on uses /config/ instead).
 # Does NOT restart HA — restart manually after verifying the diff.
 #
 # Required Gitea Actions secrets (Repo settings → Actions → Secrets):
@@ -76,9 +78,9 @@ jobs:
             --exclude='*.pyc' \
             -e "ssh -i ~/.ssh/deploy_key -p ${HA_SSH_PORT:-22}" \
             custom_components/myskoda_insights/ \
-            "${HA_USER}@${HA_HOST}:/config/custom_components/myskoda_insights/"
+            "${HA_USER}@${HA_HOST}:/homeassistant/custom_components/myskoda_insights/"
 
       - name: Summary
         run: |
-          echo "Deployed custom_components/myskoda_insights to ${{ secrets.HA_HOST }}:/config/custom_components/" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed custom_components/myskoda_insights to ${{ secrets.HA_HOST }}:/homeassistant/custom_components/" >> "$GITHUB_STEP_SUMMARY"
           echo "Restart HA manually to pick up the new code." >> "$GITHUB_STEP_SUMMARY"

@@ -42,8 +42,11 @@ Required Gitea Actions secrets (Repo settings → Actions → Secrets):
 | `HA_SSH_KEY` | Full private key (including `BEGIN`/`END` lines). Authorize the matching public key on the SSH add-on. |
 
 The deploy rsyncs `custom_components/myskoda_insights/` into
-`/config/custom_components/myskoda_insights/`, with `--delete` and
-`__pycache__/*.pyc` excluded.
+`/homeassistant/custom_components/myskoda_insights/` — the path the
+Advanced SSH & Web Terminal community add-on mounts the HA config dir
+at. (The official SSH & Web Terminal add-on uses `/config/` instead;
+change the workflow if you switch add-ons.) `--delete` is on, and
+`__pycache__`/`*.pyc` are excluded.
 
 ## Code map
 
