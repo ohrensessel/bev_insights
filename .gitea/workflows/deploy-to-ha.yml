@@ -20,6 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install rsync
+        # The default Gitea act_runner ubuntu image is slim and ships without
+        # rsync. Install it on whichever package manager is present.
+        run: |
+          if command -v rsync >/dev/null; then
+            exit 0
+          fi
+          if command -v apt-get >/dev/null; then
+            apt-get update && apt-get install -y --no-install-recommends rsync openssh-client
+          elif command -v apk >/dev/null; then
+            apk add --no-cache rsync openssh-client
+          else
+            echo "No supported package manager found"; exit 1
+          fi
+
       - name: Configure SSH
         env:
           HA_HOST: ${{ secrets.HA_HOST }}
