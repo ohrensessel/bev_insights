@@ -14,6 +14,7 @@ All persisted data survives Home Assistant restarts via
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
 from typing import Any
@@ -77,7 +78,7 @@ class ChargeTracker:
         # restarts mid-charge (in which case that one cycle won't produce a
         # complete `last_session`).
         self._pending_start: dict[str, Any] | None = None
-        self._unsub: callable | None = None
+        self._unsub: Callable[[], None] | None = None
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                          #
@@ -272,7 +273,7 @@ class EntityHistory:
             f"{storage_key_prefix}.{entry.entry_id}",
         )
         self._samples: deque[tuple[datetime, float]] = deque()
-        self._unsub: callable | None = None
+        self._unsub: Callable[[], None] | None = None
         self._max_age = timedelta(days=max_age_days)
 
     # Lifecycle --------------------------------------------------------- #

@@ -1,3 +1,15 @@
+[tool.mypy]
+# Strict type-checking on the production code only. Tests intentionally
+# poke at private attributes and use unannotated fixtures, so they are
+# not in scope. HA itself is typed via `homeassistant-stubs`.
+python_version = "3.12"
+strict = true
+files = ["custom_components/myskoda_insights"]
+
+[[tool.mypy.overrides]]
+module = ["pytest_homeassistant_custom_component.*", "voluptuous.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

@@ -732,7 +732,7 @@ class TimeSinceLastChargeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         self._subscribe_baseline_updates()
 
         @callback
-        def _tick(_=None) -> None:
+        def _tick(_now: datetime) -> None:
             self._recalculate()
             self.async_write_ha_state()
 
@@ -1029,6 +1029,11 @@ class DistanceRolling7DaysSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
             self._recalculate()
             self.async_write_ha_state()
 
+        @callback
+        def _on_tick(_now: datetime) -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -1041,7 +1046,7 @@ class DistanceRolling7DaysSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         # car isn't moving. Once per hour is plenty for a 7-day window.
         self.async_on_remove(
             async_track_time_change(
-                self.hass, _on_history_update, minute=0, second=0
+                self.hass, _on_tick, minute=0, second=0
             )
         )
 
@@ -1195,7 +1200,12 @@ class _WindowedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         await super().async_added_to_hass()
 
         @callback
-        def _tick(_=None) -> None:
+        def _tick_dispatcher() -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        @callback
+        def _tick_time(_now: datetime) -> None:
             self._recalculate()
             self.async_write_ha_state()
 
@@ -1204,7 +1214,7 @@ class _WindowedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
                 async_dispatcher_connect(
                     self.hass,
                     signal_soc_history_updated(self._entry.entry_id),
-                    _tick,
+                    _tick_dispatcher,
                 )
             )
         if self._listen_mileage_history:
@@ -1212,14 +1222,14 @@ class _WindowedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
                 async_dispatcher_connect(
                     self.hass,
                     signal_mileage_history_updated(self._entry.entry_id),
-                    _tick,
+                    _tick_dispatcher,
                 )
             )
 
         # Hourly tick keeps the window "sliding" even when no source
         # entity changes; midnight covers the calendar-week reset.
         self.async_on_remove(
-            async_track_time_change(self.hass, _tick, minute=0, second=0)
+            async_track_time_change(self.hass, _tick_time, minute=0, second=0)
         )
 
 

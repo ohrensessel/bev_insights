@@ -149,5 +149,5 @@ class MySkodaInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_schema(entry.data),
+            data_schema=_schema(dict(entry.data)),
         )
