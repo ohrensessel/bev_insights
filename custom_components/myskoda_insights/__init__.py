@@ -12,10 +12,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from .capacity import CapacitySource, EntityCapacity, FixedCapacity
 from .const import (
+    CONF_CAPACITY_ACTUAL_ENTITY,
+    CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
     CONF_MILEAGE_SENSOR,
     CONF_SOC_SENSOR,
+    CONFIG_ENTRY_VERSION,
+    DEFAULT_CAPACITY_KWH,
     DOMAIN,
 )
 from .tracker import ChargeTracker, MileageHistory, SocHistory
@@ -58,11 +63,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await soc_history.async_load()
     soc_history.async_start()
 
+    # Build the two capacity sources up front so sensor.py doesn't need
+    # to know how to read them — it just calls .current() per recalc.
+    capacity_factory: CapacitySource = FixedCapacity(
+        float(entry.data.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH))
+    )
+    capacity_actual: CapacitySource = EntityCapacity(
+        hass, entry.data[CONF_CAPACITY_ACTUAL_ENTITY]
+    )
+
     hass.data[DOMAIN][entry.entry_id] = {
         "data": dict(entry.data),
         "tracker": tracker,
         "mileage_history": mileage_history,
         "soc_history": soc_history,
+        "capacity_factory": capacity_factory,
+        "capacity_actual": capacity_actual,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -84,6 +100,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if soc_history := domain_data.get("soc_history"):
                 await soc_history.async_stop()
     return unload_ok
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
+    """Migrate older config entries.
+
+    v1 → v2: the actual-capacity field used to be a float (kWh).
+    From v2 onward it's an entity_id whose state is read live. We don't
+    have an entity to point at, so we leave it unset and the user is
+    prompted to fill it in on next reconfigure. The old value is dropped
+    after being logged so the user can recreate it as an input_number.
+    """
+    if entry.version == 1:
+        _LOGGER.warning(
+            "Migrating MySkoda Insights config entry to v2: please create "
+            "an input_number helper with your actual remaining capacity "
+            "(the previous value was %.2f kWh) and select it via "
+            "Reconfigure on the integration card.",
+            float(entry.data.get("capacity_actual_kwh", 0.0)),
+        )
+        new_data = {k: v for k, v in entry.data.items() if k != "capacity_actual_kwh"}
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, version=CONFIG_ENTRY_VERSION
+        )
+        # Setup will fail without a capacity_actual_entity; flag the entry
+        # as needing reconfiguration. HA will surface a "Reconfigure"
+        # prompt to the user in the UI.
+        return False
+    return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

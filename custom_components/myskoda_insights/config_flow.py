@@ -9,13 +9,14 @@ from homeassistant import config_entries
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_CAPACITY_ACTUAL,
+    CONF_CAPACITY_ACTUAL_ENTITY,
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
     CONF_MILEAGE_SENSOR,
     CONF_NAME,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
+    CONFIG_ENTRY_VERSION,
     DEFAULT_CAPACITY_KWH,
     DEFAULT_NAME,
     DOMAIN,
@@ -34,7 +35,18 @@ def _sensor_selector() -> selector.EntitySelector:
     )
 
 
-def _capacity_selector() -> selector.NumberSelector:
+def _capacity_entity_selector() -> selector.EntitySelector:
+    """Picker for the live actual-capacity source.
+
+    Accepts `input_number` (the common "user-editable helper" approach)
+    and `sensor` (for outputs of other integrations or template sensors).
+    """
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(domain=["input_number", "sensor"])
+    )
+
+
+def _factory_capacity_selector() -> selector.NumberSelector:
     return selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=1.0,
@@ -62,12 +74,20 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         vol.Required(
             CONF_CAPACITY_FACTORY,
             default=defaults.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH),
-        ): _capacity_selector(),
-        vol.Required(
-            CONF_CAPACITY_ACTUAL,
-            default=defaults.get(CONF_CAPACITY_ACTUAL, DEFAULT_CAPACITY_KWH),
-        ): _capacity_selector(),
+        ): _factory_capacity_selector(),
     }
+
+    # Actual-capacity entity: required, but we don't have a default value
+    # to suggest unless the user already picked one (e.g. on reconfigure).
+    actual_default = defaults.get(CONF_CAPACITY_ACTUAL_ENTITY)
+    if actual_default is not None:
+        fields[
+            vol.Required(
+                CONF_CAPACITY_ACTUAL_ENTITY, default=actual_default
+            )
+        ] = _capacity_entity_selector()
+    else:
+        fields[vol.Required(CONF_CAPACITY_ACTUAL_ENTITY)] = _capacity_entity_selector()
 
     charging_default = defaults.get(CONF_CHARGING_SENSOR)
     if charging_default is not None:
@@ -91,7 +111,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
 class MySkodaInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for MySkoda Insights."""
 
-    VERSION = 1
+    VERSION = CONFIG_ENTRY_VERSION
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

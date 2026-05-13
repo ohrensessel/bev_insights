@@ -11,13 +11,13 @@
           "charging_sensor": "Charging-state sensor (optional)",
           "mileage_sensor": "Mileage / odometer sensor (optional)",
           "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
-          "capacity_actual_kwh": "Current remaining battery capacity (kWh)"
+          "capacity_actual_entity": "Live actual battery capacity entity"
         },
         "data_description": {
           "charging_sensor": "Used to detect when a charge has just ended. May be a sensor or a binary_sensor.",
           "mileage_sensor": "The car's odometer, used to measure distance driven since the last charge.",
           "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
-          "capacity_actual_kwh": "Your battery's current real-world capacity in kWh. Update this periodically as the battery ages."
+          "capacity_actual_entity": "An input_number helper or sensor whose state is your battery's current real-world capacity in kWh. Change the helper's value to update all actual-capacity sensors without reloading the integration."
         }
       },
       "reconfigure": {
@@ -30,13 +30,13 @@
           "charging_sensor": "Charging-state sensor (optional)",
           "mileage_sensor": "Mileage / odometer sensor (optional)",
           "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
-          "capacity_actual_kwh": "Current remaining battery capacity (kWh)"
+          "capacity_actual_entity": "Live actual battery capacity entity"
         },
         "data_description": {
           "charging_sensor": "Used to detect when a charge has just ended. May be a sensor or a binary_sensor.",
           "mileage_sensor": "The car's odometer, used to measure distance driven since the last charge.",
           "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
-          "capacity_actual_kwh": "Your battery's current real-world capacity in kWh. Update this periodically as the battery ages."
+          "capacity_actual_entity": "An input_number helper or sensor whose state is your battery's current real-world capacity in kWh. Change the helper's value to update all actual-capacity sensors without reloading the integration."
         }
       }
     },

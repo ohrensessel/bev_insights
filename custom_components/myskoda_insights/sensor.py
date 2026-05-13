@@ -41,17 +41,15 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .capacity import CapacitySource
 from .const import (
     BASELINE_MILEAGE_KM,
     BASELINE_SOC_PERCENT,
     BASELINE_TIMESTAMP,
-    CONF_CAPACITY_ACTUAL,
-    CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
     CONF_MILEAGE_SENSOR,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
-    DEFAULT_CAPACITY_KWH,
     DOMAIN,
     UNIT_KM_PER_KWH,
     UNIT_KWH_PER_100KM,
@@ -80,40 +78,48 @@ async def async_setup_entry(
     tracker: ChargeTracker | None = domain_data.get("tracker")
     mileage_history: MileageHistory | None = domain_data.get("mileage_history")
     soc_history: SocHistory | None = domain_data.get("soc_history")
+    capacity_factory: CapacitySource = domain_data["capacity_factory"]
+    capacity_actual: CapacitySource = domain_data["capacity_actual"]
 
     soc_entity: str = data[CONF_SOC_SENSOR]
     range_entity: str = data[CONF_RANGE_SENSOR]
-    capacity_factory = float(data.get(CONF_CAPACITY_FACTORY, DEFAULT_CAPACITY_KWH))
-    capacity_actual = float(data.get(CONF_CAPACITY_ACTUAL, DEFAULT_CAPACITY_KWH))
 
     entities: list[SensorEntity] = [
         FullBatteryRangeSensor(entry, soc_entity, range_entity),
     ]
 
     # Efficiency: 2 capacities × 2 units = 4 sensors
-    for capacity_kwh, capacity_variant in (
+    for capacity, capacity_variant in (
         (capacity_factory, VARIANT_FACTORY),
         (capacity_actual, VARIANT_ACTUAL),
     ):
-        for unit_variant in (UNIT_VARIANT_KWH_PER_100KM, UNIT_VARIANT_KM_PER_KWH):
+        for unit_variant in (
+            UNIT_VARIANT_KWH_PER_100KM,
+            UNIT_VARIANT_KM_PER_KWH,
+        ):
             entities.append(
                 EfficiencySensor(
-                    entry, soc_entity, range_entity,
-                    capacity_kwh=capacity_kwh,
+                    entry,
+                    soc_entity,
+                    range_entity,
+                    capacity=capacity,
                     capacity_variant=capacity_variant,
                     unit_variant=unit_variant,
                 )
             )
 
+    # Tracker-dependent sensors only if the user wired up the prerequisites.
     if tracker is not None:
         mileage_entity: str = data[CONF_MILEAGE_SENSOR]
         entities.append(
-            MeasuredFullRangeSensor(entry, tracker, soc_entity, mileage_entity)
+            MeasuredFullRangeSensor(
+                entry, tracker, soc_entity, mileage_entity
+            )
         )
         entities.append(LastChargedSensor(entry, tracker))
 
         # Measured efficiency: 2 capacities × 2 units = 4 sensors
-        for capacity_kwh, capacity_variant in (
+        for capacity, capacity_variant in (
             (capacity_factory, VARIANT_FACTORY),
             (capacity_actual, VARIANT_ACTUAL),
         ):
@@ -123,13 +129,18 @@ async def async_setup_entry(
             ):
                 entities.append(
                     MeasuredEfficiencySensor(
-                        entry, tracker, soc_entity, mileage_entity,
-                        capacity_kwh=capacity_kwh,
+                        entry,
+                        tracker,
+                        soc_entity,
+                        mileage_entity,
+                        capacity=capacity,
                         capacity_variant=capacity_variant,
                         unit_variant=unit_variant,
                     )
                 )
 
+    # Mileage-history sensors only require the odometer; they work even
+    # if no charging sensor was configured.
     if mileage_history is not None:
         entities.append(
             DistanceRolling7DaysSensor(entry, mileage_history)
@@ -140,14 +151,18 @@ async def async_setup_entry(
             )
         )
 
+    # Two windowed shapes: rolling 7 days, calendar week. Used for both
+    # kWh consumed and weekly average efficiency. `kind` differentiates
+    # the cutoff calculation in the sensor.
     WINDOWS = (
         ("rolling_7_days", "Rolling 7 days"),
         ("this_week", "This week"),
     )
 
+    # kWh consumed per window — needs SoC history only.
     if soc_history is not None:
         for window_key, window_label in WINDOWS:
-            for capacity_kwh, capacity_variant in (
+            for capacity, capacity_variant in (
                 (capacity_factory, VARIANT_FACTORY),
                 (capacity_actual, VARIANT_ACTUAL),
             ):
@@ -155,16 +170,17 @@ async def async_setup_entry(
                     EnergyConsumedWindowSensor(
                         entry,
                         soc_history,
-                        capacity_kwh=capacity_kwh,
+                        capacity=capacity,
                         capacity_variant=capacity_variant,
                         window_key=window_key,
                         window_label=window_label,
                     )
                 )
 
+    # Weekly average efficiency — needs both histories together.
     if soc_history is not None and mileage_history is not None:
         for window_key, window_label in WINDOWS:
-            for capacity_kwh, capacity_variant in (
+            for capacity, capacity_variant in (
                 (capacity_factory, VARIANT_FACTORY),
                 (capacity_actual, VARIANT_ACTUAL),
             ):
@@ -177,7 +193,7 @@ async def async_setup_entry(
                             entry,
                             soc_history,
                             mileage_history,
-                            capacity_kwh=capacity_kwh,
+                            capacity=capacity,
                             capacity_variant=capacity_variant,
                             unit_variant=unit_variant,
                             window_key=window_key,
@@ -216,6 +232,7 @@ class MySkodaDerivedSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to state changes of source entities."""
+
         if self._source_entities:
 
             @callback
@@ -229,6 +246,7 @@ class MySkodaDerivedSensor(SensorEntity):
                 )
             )
 
+        # Compute an initial value as soon as we're added to hass.
         self._recalculate()
 
     @callback
@@ -243,7 +261,11 @@ class MySkodaDerivedSensor(SensorEntity):
 
 
 class FullBatteryRangeSensor(MySkodaDerivedSensor):
-    """Electric range extrapolated to a 100% state of charge."""
+    """Electric range extrapolated to a 100% state of charge.
+
+    Computed as:  range_at_100% = current_range / current_soc * 100
+    Uses the car's own range prediction, scaled by SoC.
+    """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -266,7 +288,12 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
         soc = read_float(self.hass, self._soc_entity)
         current_range = read_distance_km(self.hass, self._range_entity)
 
-        if soc is None or current_range is None or soc <= 0 or current_range < 0:
+        if (
+            soc is None
+            or current_range is None
+            or soc <= 0
+            or current_range < 0
+        ):
             self._attr_available = False
             self._attr_native_value = None
             return
@@ -281,7 +308,9 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
             "soc_source": self._soc_entity,
             "range_source": self._range_entity,
             "current_soc_percent": read_float(self.hass, self._soc_entity),
-            "current_range_km": read_distance_km(self.hass, self._range_entity),
+            "current_range_km": read_distance_km(
+                self.hass, self._range_entity
+            ),
         }
 
 
@@ -290,7 +319,90 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
 # --------------------------------------------------------------------------- #
 
 
-# Shared helpers for all efficiency sensors.
+class EfficiencySensor(MySkodaDerivedSensor):
+    """Implied driving efficiency derived from the car's range prediction.
+
+        kWh/100 km = capacity * soc / range_km
+        km/kWh     = range_km / (capacity * soc / 100)
+
+    Instantiated four times per config entry:
+    {factory, actual} capacity × {kWh/100 km, km/kWh}.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_entity: str,
+        range_entity: str,
+        capacity: CapacitySource,
+        capacity_variant: str,
+        unit_variant: str,
+    ) -> None:
+        # Listen to the capacity-source entity too (if it's reactive) so
+        # the sensor recomputes when the user moves the input_number slider.
+        sources = [soc_entity, range_entity]
+        if capacity.source_entity:
+            sources.append(capacity.source_entity)
+        super().__init__(entry, sources)
+        self._soc_entity = soc_entity
+        self._range_entity = range_entity
+        self._capacity = capacity
+        self._capacity_variant = capacity_variant
+        self._unit_variant = unit_variant
+
+        unit_label, icon, precision = _unit_variant_props(unit_variant)
+        self._attr_native_unit_of_measurement = unit_label
+        self._attr_icon = icon
+        self._attr_suggested_display_precision = precision
+
+        self._attr_unique_id = (
+            f"{entry.entry_id}_efficiency_{capacity_variant}_{unit_variant}"
+        )
+        self._attr_translation_key = (
+            f"efficiency_{capacity_variant}_{unit_variant}"
+        )
+        self._attr_name = (
+            f"Efficiency ({capacity_variant} capacity, "
+            f"{_human_unit(unit_variant)})"
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        soc = read_float(self.hass, self._soc_entity)
+        current_range = read_distance_km(self.hass, self._range_entity)
+        capacity_kwh = self._capacity.current()
+        if capacity_kwh is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        value = _efficiency_value(
+            capacity_kwh=capacity_kwh,
+            soc_percent=soc,
+            distance_km=current_range,
+            unit_variant=self._unit_variant,
+        )
+        if value is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = value
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "capacity_variant": self._capacity_variant,
+            "unit_variant": self._unit_variant,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
+            "soc_source": self._soc_entity,
+            "range_source": self._range_entity,
+        }
+
+
+# Shared helpers for the four efficiency sensors and their measured twins.
 
 def _unit_variant_props(unit_variant: str) -> tuple[str, str, int]:
     """Return (HA unit string, icon, suggested precision) per unit variant."""
@@ -312,7 +424,15 @@ def _efficiency_value(
     distance_km: float | None,
     unit_variant: str,
 ) -> float | None:
-    """Compute one efficiency figure or return None for invalid inputs."""
+    """Compute one efficiency figure or return None for invalid inputs.
+
+    `soc_percent` and `distance_km` describe a *consumption sample*:
+      - For the car-prediction variant: current SoC and current range.
+      - For the measured variant: SoC consumed and distance driven
+        since the last charge end.
+
+    The math is identical in both cases, which is why this helper is shared.
+    """
     if (
         soc_percent is None
         or distance_km is None
@@ -323,79 +443,13 @@ def _efficiency_value(
         return None
 
     soc_percent = min(soc_percent, 100.0)
+    # Energy represented by `soc_percent` of the configured capacity.
     energy_kwh = capacity_kwh * soc_percent / 100.0
 
     if unit_variant == UNIT_VARIANT_KM_PER_KWH:
         return round(distance_km / energy_kwh, 3)
+    # Default: kWh per 100 km
     return round(energy_kwh / distance_km * 100.0, 2)
-
-
-class EfficiencySensor(MySkodaDerivedSensor):
-    """Implied driving efficiency derived from the car's range prediction.
-
-    Instantiated four times per config entry:
-    {factory, actual} capacity × {kWh/100 km, km/kWh}.
-    """
-
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(
-        self,
-        entry: ConfigEntry,
-        soc_entity: str,
-        range_entity: str,
-        capacity_kwh: float,
-        capacity_variant: str,
-        unit_variant: str,
-    ) -> None:
-        super().__init__(entry, [soc_entity, range_entity])
-        self._soc_entity = soc_entity
-        self._range_entity = range_entity
-        self._capacity_kwh = capacity_kwh
-        self._capacity_variant = capacity_variant
-        self._unit_variant = unit_variant
-
-        unit_label, icon, precision = _unit_variant_props(unit_variant)
-        self._attr_native_unit_of_measurement = unit_label
-        self._attr_icon = icon
-        self._attr_suggested_display_precision = precision
-
-        self._attr_unique_id = (
-            f"{entry.entry_id}_efficiency_{capacity_variant}_{unit_variant}"
-        )
-        self._attr_translation_key = (
-            f"efficiency_{capacity_variant}_{unit_variant}"
-        )
-        self._attr_name = (
-            f"Efficiency ({capacity_variant} capacity, {_human_unit(unit_variant)})"
-        )
-
-    @callback
-    def _recalculate(self) -> None:
-        soc = read_float(self.hass, self._soc_entity)
-        current_range = read_distance_km(self.hass, self._range_entity)
-        value = _efficiency_value(
-            capacity_kwh=self._capacity_kwh,
-            soc_percent=soc,
-            distance_km=current_range,
-            unit_variant=self._unit_variant,
-        )
-        if value is None:
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-        self._attr_available = True
-        self._attr_native_value = value
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "capacity_variant": self._capacity_variant,
-            "unit_variant": self._unit_variant,
-            "capacity_kwh": self._capacity_kwh,
-            "soc_source": self._soc_entity,
-            "range_source": self._range_entity,
-        }
 
 
 # --------------------------------------------------------------------------- #
@@ -404,7 +458,13 @@ class EfficiencySensor(MySkodaDerivedSensor):
 
 
 class _TrackerLinkedMixin:
-    """Adds a subscription to baseline-updated dispatcher signals."""
+    """Adds a subscription to baseline-updated dispatcher signals.
+
+    Mixin used by sensors that need to recompute when the ChargeTracker
+    writes a new baseline. Expects the host class to define `self._entry`
+    and the standard HA entity API (`hass`, `async_on_remove`,
+    `_recalculate`, `async_write_ha_state`).
+    """
 
     _entry: ConfigEntry
 
@@ -424,7 +484,16 @@ class _TrackerLinkedMixin:
 
 
 class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
-    """Range at 100% SoC, measured from actual driving since last charge."""
+    """Range at 100% SoC, measured from actual driving since last charge.
+
+        distance_since_charge = current_mileage_km - baseline_mileage_km
+        soc_consumed          = baseline_soc_percent - current_soc_percent
+        measured_full_range   = distance_since_charge / soc_consumed * 100
+
+    Reflects real-world consumption rather than the car's range prediction.
+    Unavailable until a charging session has ended and the user has driven
+    far enough for `soc_consumed > 0`.
+    """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -476,6 +545,8 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         distance_km = current_mileage - baseline_mileage
         soc_consumed = baseline_soc - current_soc
 
+        # Need a positive amount of driving AND a positive amount of SoC
+        # actually used before the figure means anything.
         if distance_km <= 0 or soc_consumed <= 0:
             self._attr_available = False
             self._attr_native_value = None
@@ -497,6 +568,7 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
             "current_mileage_km": current_mileage,
             "current_soc_percent": current_soc,
         }
+
         if (
             baseline.get(BASELINE_MILEAGE_KM) is not None
             and current_mileage is not None
@@ -523,6 +595,8 @@ class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
     _attr_translation_key = "last_charged"
 
     def __init__(self, entry: ConfigEntry, tracker: ChargeTracker) -> None:
+        # No live HA sources to track; updates come exclusively via the
+        # baseline dispatcher.
         super().__init__(entry, source_entities=[])
         self._tracker = tracker
         self._attr_unique_id = f"{entry.entry_id}_last_charged"
@@ -567,8 +641,13 @@ class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
     """Implied efficiency from real driving since the last charge end.
 
-    Like EfficiencySensor, instantiated four times per config entry:
-    {factory, actual} capacity × {kWh/100 km, km/kWh}.
+    Uses the same `_efficiency_value` math as `EfficiencySensor`, but
+    sourced from the tracker baseline:
+        soc_consumed = baseline_soc - current_soc        [%]
+        distance     = current_mileage - baseline_mileage [km]
+
+    Like the car-prediction efficiency, instantiated four times per
+    config entry: {factory, actual} capacity × {kWh/100 km, km/kWh}.
     """
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -579,15 +658,18 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         tracker: ChargeTracker,
         soc_entity: str,
         mileage_entity: str,
-        capacity_kwh: float,
+        capacity: CapacitySource,
         capacity_variant: str,
         unit_variant: str,
     ) -> None:
-        super().__init__(entry, [soc_entity, mileage_entity])
+        sources = [soc_entity, mileage_entity]
+        if capacity.source_entity:
+            sources.append(capacity.source_entity)
+        super().__init__(entry, sources)
         self._tracker = tracker
         self._soc_entity = soc_entity
         self._mileage_entity = mileage_entity
-        self._capacity_kwh = capacity_kwh
+        self._capacity = capacity
         self._capacity_variant = capacity_variant
         self._unit_variant = unit_variant
 
@@ -624,12 +706,14 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         baseline_soc = baseline.get(BASELINE_SOC_PERCENT)
         current_mileage = read_distance_km(self.hass, self._mileage_entity)
         current_soc = read_float(self.hass, self._soc_entity)
+        capacity_kwh = self._capacity.current()
 
         if (
             baseline_mileage is None
             or baseline_soc is None
             or current_mileage is None
             or current_soc is None
+            or capacity_kwh is None
         ):
             self._attr_available = False
             self._attr_native_value = None
@@ -639,7 +723,7 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         soc_consumed = baseline_soc - current_soc
 
         value = _efficiency_value(
-            capacity_kwh=self._capacity_kwh,
+            capacity_kwh=capacity_kwh,
             soc_percent=soc_consumed,
             distance_km=distance_km,
             unit_variant=self._unit_variant,
@@ -661,7 +745,8 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         attrs: dict[str, Any] = {
             "capacity_variant": self._capacity_variant,
             "unit_variant": self._unit_variant,
-            "capacity_kwh": self._capacity_kwh,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
             "baseline_mileage_km": baseline.get(BASELINE_MILEAGE_KM),
             "baseline_soc_percent": baseline.get(BASELINE_SOC_PERCENT),
             "baseline_timestamp": baseline.get(BASELINE_TIMESTAMP),
@@ -682,14 +767,17 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
             )
         return attrs
 
-
 # --------------------------------------------------------------------------- #
 # Mileage-history sensors                                                     #
 # --------------------------------------------------------------------------- #
 
 
 def _local_week_start(now_utc: datetime, hass: HomeAssistant) -> datetime:
-    """Return the local Monday 00:00 of the week containing `now_utc`, in UTC."""
+    """Return the local Monday 00:00 of the week containing `now_utc`, in UTC.
+
+    Uses Home Assistant's configured time zone so the week boundary
+    matches the user's locale, not server UTC.
+    """
     local_tz = dt_util.get_time_zone(hass.config.time_zone) or dt_util.UTC
     local = now_utc.astimezone(local_tz)
     monday_local = local - timedelta(days=local.weekday())
@@ -699,8 +787,13 @@ def _local_week_start(now_utc: datetime, hass: HomeAssistant) -> datetime:
     return monday_local.astimezone(dt_util.UTC)
 
 
-class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
-    """Kilometres driven in the trailing 7 days (rolling window)."""
+class DistanceRolling7DaysSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+    """Kilometres driven in the trailing 7 days (rolling window).
+
+    Always reflects "the last 168 hours of driving" rather than resetting
+    on a calendar boundary. Useful for spotting trends and for budgets
+    that don't align to weeks.
+    """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -712,6 +805,8 @@ class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
     def __init__(
         self, entry: ConfigEntry, mileage_history: MileageHistory
     ) -> None:
+        # No source entities — the mileage history listens for itself and
+        # signals us via the dispatcher.
         super().__init__(entry, source_entities=[])
         self._mileage_history = mileage_history
         self._attr_unique_id = f"{entry.entry_id}_distance_rolling_7_days"
@@ -720,6 +815,9 @@ class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
+        # Re-use the existing mixin pattern but with a different dispatcher
+        # signal. (Slight abuse of the mixin: cheaper than duplicating the
+        # connect/recompute boilerplate.)
         @callback
         def _on_history_update() -> None:
             self._recalculate()
@@ -733,6 +831,8 @@ class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
             )
         )
 
+        # Time-based ticker so the window actually rolls even when the
+        # car isn't moving. Once per hour is plenty for a 7-day window.
         self.async_on_remove(
             async_track_time_change(
                 self.hass, _on_history_update, minute=0, second=0
@@ -753,7 +853,9 @@ class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         oldest = self._mileage_history.oldest_sample
-        attrs: dict[str, Any] = {"window": "rolling_7_days"}
+        attrs: dict[str, Any] = {
+            "window": "rolling_7_days",
+        }
         if oldest is not None:
             attrs["oldest_sample_timestamp"] = oldest[0].isoformat()
             attrs["oldest_sample_mileage_km"] = oldest[1]
@@ -761,7 +863,10 @@ class DistanceRolling7DaysSensor(MySkodaDerivedSensor):
 
 
 class DistanceThisWeekSensor(MySkodaDerivedSensor):
-    """Kilometres driven since local Monday 00:00 (calendar week)."""
+    """Kilometres driven since local Monday 00:00 (calendar week).
+
+    Resets to 0 every Monday at midnight in the HA-configured timezone.
+    """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.TOTAL
@@ -776,6 +881,8 @@ class DistanceThisWeekSensor(MySkodaDerivedSensor):
         mileage_history: MileageHistory,
         mileage_entity: str,
     ) -> None:
+        # Listen to the odometer directly: this sensor doesn't care about
+        # week-old history, only "what changed since Monday".
         super().__init__(entry, source_entities=[mileage_entity])
         self._mileage_history = mileage_history
         self._mileage_entity = mileage_entity
@@ -785,6 +892,8 @@ class DistanceThisWeekSensor(MySkodaDerivedSensor):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
+        # Fire a recompute at every minute past midnight so the value
+        # snaps to zero promptly when a new week begins.
         @callback
         def _midnight_tick(now: datetime) -> None:
             self._recalculate()
@@ -799,8 +908,13 @@ class DistanceThisWeekSensor(MySkodaDerivedSensor):
     @callback
     def _recalculate(self) -> None:
         week_start = _local_week_start(dt_util.utcnow(), self.hass)
+        # Prefer the history's baseline-aware lookup. If the user installed
+        # the integration midweek and the deque starts after Monday, fall
+        # back to "distance since first sample" — explicitly noting that
+        # in attributes so the value isn't misleading.
         distance = self._mileage_history.distance_since(week_start)
         if distance is None:
+            # No pre-week sample yet — use the oldest sample we have.
             oldest = self._mileage_history.oldest_sample
             current = read_distance_km(self.hass, self._mileage_entity)
             if oldest is None or current is None:
@@ -819,6 +933,8 @@ class DistanceThisWeekSensor(MySkodaDerivedSensor):
             "window": "calendar_week",
             "week_start": week_start.isoformat(),
         }
+        # Tell the user when the figure is approximate because we don't
+        # yet have a pre-week sample to anchor on.
         if oldest is not None and oldest[0] > week_start:
             attrs["partial_week_data"] = True
             attrs["oldest_sample_timestamp"] = oldest[0].isoformat()
@@ -838,13 +954,17 @@ def _window_cutoff(
     """Return the cutoff timestamp for a named window."""
     if window_key == "this_week":
         return _local_week_start(now_utc, hass)
+    # Default: rolling 7 days
     return now_utc - timedelta(days=7)
 
 
-class _WindowedSensor(MySkodaDerivedSensor):
+class _WindowedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
     """Common scaffolding for window-based sensors.
 
-    Listens to both history dispatchers plus an hourly time tick.
+    Listens to both the SoC and the (optional) mileage history dispatchers,
+    plus an hourly time tick so the rolling window keeps rolling and the
+    calendar-week one resets cleanly at midnight. Subclasses implement
+    `_recalculate()` to do the actual math.
     """
 
     def __init__(
@@ -854,8 +974,12 @@ class _WindowedSensor(MySkodaDerivedSensor):
         window_label: str,
         listen_soc_history: bool,
         listen_mileage_history: bool,
+        capacity_entity: str | None = None,
     ) -> None:
-        super().__init__(entry, source_entities=[])
+        # If the capacity is sourced from an entity, list it as a source
+        # entity so the base class wires up a state-change listener for us.
+        sources = [capacity_entity] if capacity_entity else []
+        super().__init__(entry, source_entities=sources)
         self._window_key = window_key
         self._window_label = window_label
         self._listen_soc_history = listen_soc_history
@@ -886,6 +1010,8 @@ class _WindowedSensor(MySkodaDerivedSensor):
                 )
             )
 
+        # Hourly tick keeps the window "sliding" even when no source
+        # entity changes; midnight covers the calendar-week reset.
         self.async_on_remove(
             async_track_time_change(self.hass, _tick, minute=0, second=0)
         )
@@ -895,6 +1021,9 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
     """kWh consumed over a window.
 
         kWh = capacity * soc_consumed_percent / 100
+
+    `soc_consumed_percent` comes from SocHistory.consumed_since() and
+    correctly ignores upward SoC steps (i.e. charging) within the window.
     """
 
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -907,41 +1036,45 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
         self,
         entry: ConfigEntry,
         soc_history: SocHistory,
-        capacity_kwh: float,
+        capacity: CapacitySource,
         capacity_variant: str,
         window_key: str,
         window_label: str,
     ) -> None:
         super().__init__(
-            entry, window_key, window_label,
+            entry,
+            window_key,
+            window_label,
             listen_soc_history=True,
             listen_mileage_history=False,
+            capacity_entity=capacity.source_entity,
         )
         self._soc_history = soc_history
-        self._capacity_kwh = capacity_kwh
+        self._capacity = capacity
         self._capacity_variant = capacity_variant
         self._attr_unique_id = (
-            f"{entry.entry_id}_energy_consumed_{window_key}_{capacity_variant}"
+            f"{entry.entry_id}_energy_consumed_"
+            f"{window_key}_{capacity_variant}"
         )
         self._attr_translation_key = (
             f"energy_consumed_{window_key}_{capacity_variant}"
         )
         self._attr_name = (
-            f"Energy consumed ({window_label.lower()}, {capacity_variant} capacity)"
+            f"Energy consumed ({window_label.lower()}, "
+            f"{capacity_variant} capacity)"
         )
 
     @callback
     def _recalculate(self) -> None:
         cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
         consumed_pct = self._soc_history.consumed_since(cutoff)
-        if consumed_pct is None or self._capacity_kwh <= 0:
+        capacity_kwh = self._capacity.current()
+        if consumed_pct is None or capacity_kwh is None:
             self._attr_available = False
             self._attr_native_value = None
             return
         self._attr_available = True
-        self._attr_native_value = round(
-            self._capacity_kwh * consumed_pct / 100.0, 2
-        )
+        self._attr_native_value = round(capacity_kwh * consumed_pct / 100.0, 2)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -951,7 +1084,8 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
             "window": self._window_key,
             "window_start": cutoff.isoformat(),
             "capacity_variant": self._capacity_variant,
-            "capacity_kwh": self._capacity_kwh,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
             "soc_consumed_percent": (
                 round(consumed_pct, 2) if consumed_pct is not None else None
             ),
@@ -959,7 +1093,14 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
 
 
 class AverageEfficiencyWindowSensor(_WindowedSensor):
-    """Average driving efficiency over a window."""
+    """Average driving efficiency over a window.
+
+        kWh consumed in window = capacity * soc_consumed_pct / 100
+        kWh/100 km            = kWh_consumed / km_driven * 100
+        km/kWh                = km_driven / kWh_consumed
+
+    Reuses the same dual-unit logic as EfficiencySensor via `_efficiency_value`.
+    """
 
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -968,20 +1109,23 @@ class AverageEfficiencyWindowSensor(_WindowedSensor):
         entry: ConfigEntry,
         soc_history: SocHistory,
         mileage_history: MileageHistory,
-        capacity_kwh: float,
+        capacity: CapacitySource,
         capacity_variant: str,
         unit_variant: str,
         window_key: str,
         window_label: str,
     ) -> None:
         super().__init__(
-            entry, window_key, window_label,
+            entry,
+            window_key,
+            window_label,
             listen_soc_history=True,
             listen_mileage_history=True,
+            capacity_entity=capacity.source_entity,
         )
         self._soc_history = soc_history
         self._mileage_history = mileage_history
-        self._capacity_kwh = capacity_kwh
+        self._capacity = capacity
         self._capacity_variant = capacity_variant
         self._unit_variant = unit_variant
 
@@ -1007,9 +1151,15 @@ class AverageEfficiencyWindowSensor(_WindowedSensor):
         cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
         consumed_pct = self._soc_history.consumed_since(cutoff)
         distance_km = self._mileage_history.distance_since(cutoff)
+        capacity_kwh = self._capacity.current()
+
+        if capacity_kwh is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
 
         value = _efficiency_value(
-            capacity_kwh=self._capacity_kwh,
+            capacity_kwh=capacity_kwh,
             soc_percent=consumed_pct,
             distance_km=distance_km,
             unit_variant=self._unit_variant,
@@ -1031,7 +1181,8 @@ class AverageEfficiencyWindowSensor(_WindowedSensor):
             "window_start": cutoff.isoformat(),
             "capacity_variant": self._capacity_variant,
             "unit_variant": self._unit_variant,
-            "capacity_kwh": self._capacity_kwh,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
             "soc_consumed_percent": (
                 round(consumed_pct, 2) if consumed_pct is not None else None
             ),

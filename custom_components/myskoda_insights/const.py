@@ -7,11 +7,17 @@ DOMAIN = "myskoda_insights"
 CONF_NAME = "name"
 CONF_SOC_SENSOR = "soc_sensor"
 CONF_RANGE_SENSOR = "range_sensor"
-CONF_CAPACITY_FACTORY = "capacity_factory_kwh"
-# Stored as a plain float (kWh) in the config entry.
-CONF_CAPACITY_ACTUAL = "capacity_actual_kwh"
 CONF_CHARGING_SENSOR = "charging_sensor"
 CONF_MILEAGE_SENSOR = "mileage_sensor"
+CONF_CAPACITY_FACTORY = "capacity_factory_kwh"
+# v1: a number (kWh).  v2+: an entity_id whose state is read as the live
+# actual remaining capacity in kWh.
+CONF_CAPACITY_ACTUAL_ENTITY = "capacity_actual_entity"
+
+# Schema version of the config entry payload. Bumped when the shape of
+# `entry.data` changes incompatibly so `async_migrate_entry` can repair
+# entries created by older versions.
+CONFIG_ENTRY_VERSION = 2
 
 DEFAULT_NAME = "MySkoda Insights"
 # 77 kWh is the gross capacity of a typical Skoda Enyaq 85; users override
@@ -43,6 +49,7 @@ MILEAGE_HISTORY_DAYS = 8
 SOC_HISTORY_DAYS = 8
 
 # Dispatcher signal sent when a charge-end event updates the baseline.
+# Format the per-entry signal name with `signal_baseline_updated(entry_id)`.
 def signal_baseline_updated(entry_id: str) -> str:
     return f"{DOMAIN}_baseline_updated_{entry_id}"
 
