@@ -43,8 +43,26 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "$HA_SSH_KEY" > ~/.ssh/deploy_key
+
+          # Write the key, stripping CR (Windows line endings) and ensuring a
+          # trailing newline. OpenSSH/libcrypto fails to parse otherwise.
+          printf '%s\n' "$HA_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
+          # Sanity-check the key without leaking its contents: ssh-keygen -y
+          # prints the public counterpart and exits non-zero if the private
+          # key is unreadable, so we get a clear error instead of a vague
+          # libcrypto one inside rsync.
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null; then
+            echo "::error::Private key in HA_SSH_KEY secret could not be parsed."
+            echo "Common causes: secret was pasted as one line with literal '\\n',"
+            echo "the BEGIN/END lines are missing, or the file has CRLF endings."
+            echo "First and last lines (BEGIN/END only) for diagnostics:"
+            head -n1 ~/.ssh/deploy_key
+            tail -n1 ~/.ssh/deploy_key
+            exit 1
+          fi
+
           ssh-keyscan -p "${HA_SSH_PORT:-22}" "$HA_HOST" >> ~/.ssh/known_hosts
 
       - name: Rsync integration to HA
