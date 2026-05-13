@@ -144,6 +144,57 @@ async def test_measured_full_range_after_charge_end(hass: HomeAssistant) -> None
     assert float(eff.state) == pytest.approx(15.4, rel=1e-3)
 
 
+async def test_measured_efficiency_all_four_variants(hass: HomeAssistant) -> None:
+    """Cover every (capacity × unit) combination in one realistic drive."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # Drive 100 → 60 SoC over 200 km.
+    hass.states.async_set(MILEAGE_ENTITY, "10200")
+    hass.states.async_set(SOC_ENTITY, "60")
+    await hass.async_block_till_done()
+
+    # Factory kWh/100km: 77 × 40 / 200 = 15.4
+    s = _find_state(hass, "_measured_efficiency_factory_kwh_per_100km")
+    assert float(s.state) == pytest.approx(15.4)
+    # Factory km/kWh: 200 / (77 × 40 / 100) = 200 / 30.8 ≈ 6.493
+    s = _find_state(hass, "_measured_efficiency_factory_km_per_kwh")
+    assert float(s.state) == pytest.approx(200 / 30.8, rel=1e-3)
+    # Actual kWh/100km: 70 × 40 / 200 = 14.0
+    s = _find_state(hass, "_measured_efficiency_actual_kwh_per_100km")
+    assert float(s.state) == pytest.approx(14.0)
+    # Actual km/kWh: 200 / 28 ≈ 7.143
+    s = _find_state(hass, "_measured_efficiency_actual_km_per_kwh")
+    assert float(s.state) == pytest.approx(200 / 28.0, rel=1e-3)
+
+
+async def test_full_battery_range_unavailable_on_missing_range(
+    hass: HomeAssistant,
+) -> None:
+    await _setup_full(hass)
+    hass.states.async_set(RANGE_ENTITY, "unavailable")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_full_battery_range")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_full_battery_range_handles_soc_above_100(
+    hass: HomeAssistant,
+) -> None:
+    """A glitched SoC > 100 should be clamped (not produce a too-low figure)."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "105")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_full_battery_range")
+    # Clamped to 100 → 200 km / 100 × 100 = 200 km
+    assert float(state.state) == pytest.approx(200.0)
+
+
 async def test_state_of_health_formula(hass: HomeAssistant) -> None:
     """SoH = actual / factory × 100. With factory=77, actual=70 → 90.9%."""
     await _setup_full(hass)

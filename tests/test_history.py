@@ -171,3 +171,136 @@ async def test_prune_drops_samples_past_max_age(hass: HomeAssistant) -> None:
     history._prune(now)
     assert len(history._samples) == 2
     assert history._samples[0][1] == 300.0
+
+
+# --------------------------------------------------------------------------- #
+# Persistence: async_save → async_load round-trip                             #
+# --------------------------------------------------------------------------- #
+
+
+async def test_mileage_history_persists_across_reload(
+    hass: HomeAssistant,
+) -> None:
+    """A new MileageHistory over the same entry_id reads back the samples."""
+    entry = _entry()
+    hass.states.async_set("sensor.odo", "1000")
+    history_a = MileageHistory(hass, entry, mileage_entity="sensor.odo")
+    history_a.async_start()
+    await hass.async_block_till_done()
+
+    hass.states.async_set("sensor.odo", "1050")
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.odo", "1100")
+    await hass.async_block_till_done()
+    await history_a.async_stop()
+
+    history_b = MileageHistory(hass, entry, mileage_entity="sensor.odo")
+    await history_b.async_load()
+    values = [v for _, v in history_b._samples]
+    assert values == [1000.0, 1050.0, 1100.0]
+
+
+async def test_soc_history_persists_across_reload(hass: HomeAssistant) -> None:
+    entry = _entry()
+    hass.states.async_set("sensor.soc", "80")
+    history_a = SocHistory(hass, entry, soc_entity="sensor.soc")
+    history_a.async_start()
+    await hass.async_block_till_done()
+
+    hass.states.async_set("sensor.soc", "60")
+    await hass.async_block_till_done()
+    await history_a.async_stop()
+
+    history_b = SocHistory(hass, entry, soc_entity="sensor.soc")
+    await history_b.async_load()
+    values = [v for _, v in history_b._samples]
+    assert values == [80.0, 60.0]
+
+
+async def test_async_load_drops_samples_past_max_age(
+    hass: HomeAssistant,
+) -> None:
+    """Stale samples on disk should be pruned at load time, not carried in."""
+    entry = _entry()
+    history_a = MileageHistory(hass, entry, mileage_entity="sensor.odo")
+    now = dt_util.utcnow()
+    history_a._samples.extend(
+        [
+            (now - timedelta(days=30), 100.0),  # stale (max_age = 8 days)
+            (now - timedelta(days=2), 200.0),
+        ]
+    )
+    await history_a._persist()
+
+    history_b = MileageHistory(hass, entry, mileage_entity="sensor.odo")
+    await history_b.async_load()
+    values = [v for _, v in history_b._samples]
+    assert values == [200.0]
+
+
+async def test_async_load_handles_missing_or_corrupt_data(
+    hass: HomeAssistant,
+) -> None:
+    """A fresh entry with no Store data on disk should load cleanly to empty."""
+    entry = _entry()
+    history = MileageHistory(hass, entry, mileage_entity="sensor.odo")
+    await history.async_load()
+    assert len(history._samples) == 0
+    assert history.has_data is False
+
+
+# --------------------------------------------------------------------------- #
+# Dispatcher signal firing                                                    #
+# --------------------------------------------------------------------------- #
+
+
+async def test_state_change_fires_dispatcher_signal(hass: HomeAssistant) -> None:
+    """Listeners on the per-entry mileage-update signal fire on each new sample."""
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.myskoda_insights.const import (
+        signal_mileage_history_updated,
+    )
+
+    entry = _entry()
+    received: list[int] = []
+    unsub = async_dispatcher_connect(
+        hass,
+        signal_mileage_history_updated(entry.entry_id),
+        lambda: received.append(1),
+    )
+
+    hass.states.async_set("sensor.odo", "100")
+    history = MileageHistory(hass, entry, mileage_entity="sensor.odo")
+    history.async_start()
+    await hass.async_block_till_done()
+    assert len(received) == 1  # initial sample on start
+
+    hass.states.async_set("sensor.odo", "150")
+    await hass.async_block_till_done()
+    assert len(received) == 2
+
+    # Same value as last — no new sample, no signal.
+    hass.states.async_set("sensor.odo", "150")
+    await hass.async_block_till_done()
+    assert len(received) == 2
+
+    unsub()
+    await history.async_stop()
+
+
+async def test_soc_history_clamps_out_of_range_values(
+    hass: HomeAssistant,
+) -> None:
+    """SoC reads outside [0, 100] are clamped to the legal range."""
+    entry = _entry()
+    hass.states.async_set("sensor.soc", "150")
+    history = SocHistory(hass, entry, soc_entity="sensor.soc")
+    history.async_start()
+    await hass.async_block_till_done()
+    assert history.latest_sample[1] == 100.0
+
+    hass.states.async_set("sensor.soc", "-5")
+    await hass.async_block_till_done()
+    assert history.latest_sample[1] == 0.0
+    await history.async_stop()

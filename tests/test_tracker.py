@@ -184,6 +184,77 @@ async def test_last_session_persists_across_reloads(hass: HomeAssistant) -> None
     assert tracker_b.last_session[SESSION_END_SOC_PERCENT] == 90.0
 
 
+async def test_charge_end_fires_dispatcher_signal(hass: HomeAssistant) -> None:
+    """Subscribers to `signal_baseline_updated` see exactly one callback per
+    completed charge end."""
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.myskoda_insights.const import signal_baseline_updated
+
+    entry = _entry()
+    received: list[int] = []
+    unsub = async_dispatcher_connect(
+        hass, signal_baseline_updated(entry.entry_id), lambda: received.append(1)
+    )
+
+    hass.states.async_set(MILEAGE, "1000")
+    hass.states.async_set(SOC, "50")
+    hass.states.async_set(CHARGING, "on")
+    tracker = ChargeTracker(
+        hass,
+        entry,
+        charging_entity=CHARGING,
+        mileage_entity=MILEAGE,
+        soc_entity=SOC,
+    )
+    await tracker.async_load()
+    tracker.async_start()
+    await hass.async_block_till_done()
+    assert received == []  # baseline not yet captured
+
+    hass.states.async_set(CHARGING, "off")
+    await hass.async_block_till_done()
+    assert len(received) == 1
+    unsub()
+    await tracker.async_stop()
+
+
+async def test_charge_start_with_missing_soc_skips_pending_start(
+    hass: HomeAssistant,
+) -> None:
+    """If SoC is unavailable at the rising edge the session is dropped, so the
+    eventual falling edge captures a baseline but no `last_session`."""
+    entry = _entry()
+    hass.states.async_set(MILEAGE, "1000")
+    # SoC entity intentionally never set at start of session.
+    hass.states.async_set(CHARGING, "off")
+    tracker = ChargeTracker(
+        hass,
+        entry,
+        charging_entity=CHARGING,
+        mileage_entity=MILEAGE,
+        soc_entity=SOC,
+    )
+    await tracker.async_load()
+    tracker.async_start()
+    await hass.async_block_till_done()
+
+    hass.states.async_set(CHARGING, "on")  # rising edge — SoC missing
+    await hass.async_block_till_done()
+    assert tracker._pending_start is None
+
+    # Now SoC becomes available and charging ends — baseline captures, but
+    # since pending_start was never set, no last_session is finalised.
+    hass.states.async_set(SOC, "90")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING, "off")
+    await hass.async_block_till_done()
+
+    assert tracker.baseline is not None
+    assert tracker.last_session is None
+    await tracker.async_stop()
+
+
 async def test_baseline_persists_across_reloads(hass: HomeAssistant) -> None:
     """A second tracker over the same entry sees the persisted baseline."""
     entry = _entry()
