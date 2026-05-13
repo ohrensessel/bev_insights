@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
+import pytest
 
 from custom_components.myskoda_insights.const import (
     DOMAIN,

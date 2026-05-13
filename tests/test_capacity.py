@@ -3,10 +3,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
-from custom_components.myskoda_insights.capacity import (
-    EntityCapacity,
-    FixedCapacity,
-)
+from custom_components.myskoda_insights.capacity import EntityCapacity, FixedCapacity
 
 
 def test_fixed_capacity_returns_configured_value() -> None:

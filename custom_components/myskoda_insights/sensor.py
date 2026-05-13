@@ -11,8 +11,8 @@ the baseline is updated.
 """
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -28,12 +28,7 @@ from homeassistant.const import (
     UnitOfLength,
     UnitOfTime,
 )
-from homeassistant.core import (
-    Event,
-    EventStateChangedData,
-    HomeAssistant,
-    callback,
-)
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -48,7 +43,6 @@ from .const import (
     BASELINE_MILEAGE_KM,
     BASELINE_SOC_PERCENT,
     BASELINE_TIMESTAMP,
-    CONF_CHARGING_SENSOR,
     CONF_MILEAGE_SENSOR,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
@@ -357,10 +351,11 @@ class StateOfHealthSensor(MySkodaDerivedSensor):
         capacity_factory: CapacitySource,
         capacity_actual: CapacitySource,
     ) -> None:
-        sources: list[str] = []
-        for cap in (capacity_factory, capacity_actual):
-            if cap.source_entity:
-                sources.append(cap.source_entity)
+        sources = [
+            cap.source_entity
+            for cap in (capacity_factory, capacity_actual)
+            if cap.source_entity
+        ]
         super().__init__(entry, sources)
         self._capacity_factory = capacity_factory
         self._capacity_actual = capacity_actual

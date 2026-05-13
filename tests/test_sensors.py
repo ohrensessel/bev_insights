@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import math
 
-import pytest
 from homeassistant.core import HomeAssistant
+import pytest
 
 from .common import (
     ACTUAL_CAPACITY_ENTITY,
@@ -122,7 +122,7 @@ async def test_measured_full_range_unavailable_without_baseline(
 
 
 async def test_measured_full_range_after_charge_end(hass: HomeAssistant) -> None:
-    entry = await _setup_full(hass)
+    await _setup_full(hass)
     # Simulate a charge: on → off captures baseline at the current state.
     hass.states.async_set(SOC_ENTITY, "100")
     hass.states.async_set(MILEAGE_ENTITY, "10000")

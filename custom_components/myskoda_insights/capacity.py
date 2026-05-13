@@ -19,8 +19,8 @@ Both expose the same minimal interface:
 """
 from __future__ import annotations
 
-import logging
 from abc import ABC, abstractmethod
+import logging
 
 from homeassistant.core import HomeAssistant
 

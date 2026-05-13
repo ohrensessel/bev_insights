@@ -51,14 +51,17 @@ SOC_HISTORY_DAYS = 8
 # Dispatcher signal sent when a charge-end event updates the baseline.
 # Format the per-entry signal name with `signal_baseline_updated(entry_id)`.
 def signal_baseline_updated(entry_id: str) -> str:
+    """Return the per-entry dispatcher signal fired on charge-end baseline update."""
     return f"{DOMAIN}_baseline_updated_{entry_id}"
 
 
 def signal_mileage_history_updated(entry_id: str) -> str:
+    """Return the per-entry dispatcher signal fired on a new mileage sample."""
     return f"{DOMAIN}_mileage_history_updated_{entry_id}"
 
 
 def signal_soc_history_updated(entry_id: str) -> str:
+    """Return the per-entry dispatcher signal fired on a new SoC sample."""
     return f"{DOMAIN}_soc_history_updated_{entry_id}"
 
 

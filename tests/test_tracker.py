@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myskoda_insights.const import (
@@ -11,6 +12,7 @@ from custom_components.myskoda_insights.const import (
     DOMAIN,
     SESSION_END_SOC_PERCENT,
     SESSION_START_SOC_PERCENT,
+    signal_baseline_updated,
 )
 from custom_components.myskoda_insights.tracker import ChargeTracker
 
@@ -186,11 +188,8 @@ async def test_last_session_persists_across_reloads(hass: HomeAssistant) -> None
 
 async def test_charge_end_fires_dispatcher_signal(hass: HomeAssistant) -> None:
     """Subscribers to `signal_baseline_updated` see exactly one callback per
-    completed charge end."""
-    from homeassistant.helpers.dispatcher import async_dispatcher_connect
-
-    from custom_components.myskoda_insights.const import signal_baseline_updated
-
+    completed charge end.
+    """
     entry = _entry()
     received: list[int] = []
     unsub = async_dispatcher_connect(

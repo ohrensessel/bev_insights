@@ -3,11 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.const import (
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
-    UnitOfLength,
-)
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfLength
 from homeassistant.core import HomeAssistant, State
 
 _LOGGER = logging.getLogger(__name__)

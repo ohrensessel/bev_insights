@@ -4,14 +4,15 @@ from __future__ import annotations
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myskoda_insights.const import DOMAIN
-from custom_components.myskoda_insights.tracker import (
-    MileageHistory,
-    SocHistory,
+from custom_components.myskoda_insights.const import (
+    DOMAIN,
+    signal_mileage_history_updated,
 )
+from custom_components.myskoda_insights.tracker import MileageHistory, SocHistory
 
 
 def _entry() -> MockConfigEntry:
@@ -256,12 +257,6 @@ async def test_async_load_handles_missing_or_corrupt_data(
 
 async def test_state_change_fires_dispatcher_signal(hass: HomeAssistant) -> None:
     """Listeners on the per-entry mileage-update signal fire on each new sample."""
-    from homeassistant.helpers.dispatcher import async_dispatcher_connect
-
-    from custom_components.myskoda_insights.const import (
-        signal_mileage_history_updated,
-    )
-
     entry = _entry()
     received: list[int] = []
     unsub = async_dispatcher_connect(

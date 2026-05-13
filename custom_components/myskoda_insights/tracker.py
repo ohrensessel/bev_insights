@@ -13,18 +13,13 @@ All persisted data survives Home Assistant restarts via
 """
 from __future__ import annotations
 
-import logging
 from collections import deque
 from datetime import datetime, timedelta
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import (
-    Event,
-    EventStateChangedData,
-    HomeAssistant,
-    callback,
-)
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -324,8 +319,10 @@ class EntityHistory:
     # Read API ---------------------------------------------------------- #
 
     def delta_since(self, cutoff: datetime) -> float | None:
-        """Return `latest - baseline` where baseline is the newest sample
-        at or before `cutoff`. Returns None when there's no such baseline.
+        """Return `latest - baseline`, or None.
+
+        Baseline is the newest sample at or before `cutoff`; if no such
+        sample exists, return None.
         """
         if not self._samples:
             return None
@@ -480,7 +477,7 @@ class SocHistory(EntityHistory):
             return None
         consumed = 0.0
         previous_value = self._samples[anchor_index][1]
-        for ts, value in list(self._samples)[anchor_index + 1 :]:
+        for _, value in list(self._samples)[anchor_index + 1 :]:
             if value < previous_value:
                 consumed += previous_value - value
             previous_value = value
