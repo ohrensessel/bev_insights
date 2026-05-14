@@ -1080,7 +1080,7 @@ class DistanceThisWeekSensor(MySkodaDerivedSensor):
     """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
     _attr_icon = "mdi:calendar-today"
     _attr_suggested_display_precision = 1
@@ -1243,7 +1243,7 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
     """
 
     _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:lightning-bolt-circle"
     _attr_suggested_display_precision = 2
