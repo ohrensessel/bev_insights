@@ -39,14 +39,14 @@ async def test_mileage_distance_since_returns_delta(hass: HomeAssistant) -> None
     assert history.distance_since(cutoff) == 80.0
 
 
-async def test_mileage_distance_since_returns_none_without_baseline(
+async def test_mileage_distance_since_falls_back_to_oldest_when_no_baseline(
     hass: HomeAssistant,
 ) -> None:
     history = MileageHistory(hass, _entry(), mileage_entity="sensor.odo")
     now = dt_util.utcnow()
     history._samples.extend([(now, 1000.0)])
-    # Only sample is AFTER cutoff → no baseline.
-    assert history.distance_since(now - timedelta(days=1)) is None
+    # Only sample is AFTER cutoff → falls back to oldest (same point → 0 km).
+    assert history.distance_since(now - timedelta(days=1)) == 0.0
 
 
 async def test_mileage_distance_since_clamps_negative(hass: HomeAssistant) -> None:
@@ -86,13 +86,15 @@ async def test_consumed_since_sums_only_downward_steps(
     assert history.consumed_since(cutoff) == 60.0
 
 
-async def test_consumed_since_returns_none_without_anchor(
+async def test_consumed_since_falls_back_to_oldest_when_no_anchor(
     hass: HomeAssistant,
 ) -> None:
     history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
     now = dt_util.utcnow()
     history._samples.extend([(now, 80.0)])
-    assert history.consumed_since(now - timedelta(days=1)) is None
+    # Only sample is AFTER cutoff → falls back to oldest as anchor (no
+    # subsequent samples to consume from → 0.0, not None).
+    assert history.consumed_since(now - timedelta(days=1)) == 0.0
 
 
 async def test_consumed_since_zero_when_only_charging(

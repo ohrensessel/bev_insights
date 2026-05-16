@@ -112,10 +112,10 @@ async def test_energy_consumed_ignores_charging_inside_window(
     assert float(state.state) == pytest.approx(53.9)
 
 
-async def test_energy_consumed_unavailable_without_anchor(
+async def test_energy_consumed_unavailable_without_any_samples(
     hass: HomeAssistant,
 ) -> None:
-    """No sample at or before the cutoff → unavailable, not 0."""
+    """No samples at all → unavailable."""
     entry = await _setup_full(hass)
     soc_history, _ = _histories(hass, entry)
     soc_history._samples.clear()
@@ -123,6 +123,31 @@ async def test_energy_consumed_unavailable_without_anchor(
     await hass.async_block_till_done()
     state = _find_state(hass, "_energy_consumed_rolling_7_days_factory")
     assert state.state in ("unavailable", "unknown")
+
+
+async def test_energy_consumed_fresh_install_uses_oldest_as_anchor(
+    hass: HomeAssistant,
+) -> None:
+    """All samples inside the window (fresh install): fall back to oldest
+    as anchor and set partial_window_data=True."""
+    entry = await _setup_full(hass)
+    soc_history, _ = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(hours=2), 80.0),  # oldest → anchor (fallback)
+            (now - timedelta(hours=1), 60.0),  # -20 driving
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    # consumed = 20%; factory: 77 × 20 / 100 = 15.4 kWh
+    state = _find_state(hass, "_energy_consumed_rolling_7_days_factory")
+    assert float(state.state) == pytest.approx(15.4)
+    assert state.attributes["partial_window_data"] is True
 
 
 async def test_energy_consumed_unavailable_when_actual_capacity_missing(
@@ -324,6 +349,41 @@ async def test_avg_efficiency_window_unavailable_without_data(
         hass, "_avg_efficiency_rolling_7_days_factory_kwh_per_100km"
     )
     assert state.state in ("unavailable", "unknown")
+
+
+async def test_avg_efficiency_window_fresh_install_uses_oldest_as_anchor(
+    hass: HomeAssistant,
+) -> None:
+    """All samples inside the window: compute from oldest available baseline
+    and set partial_window_data=True."""
+    entry = await _setup_full(hass)
+    soc_history, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(hours=2), 80.0),  # oldest → anchor (fallback)
+            (now - timedelta(hours=1), 60.0),  # -20 driving
+        ]
+    )
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [
+            (now - timedelta(hours=2), 10000.0),  # oldest → anchor (fallback)
+            (now - timedelta(hours=1), 10100.0),  # +100 km
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    # consumed = 20% × 77 = 15.4 kWh; kWh/100 km = 15.4 / 100 × 100 = 15.4
+    state = _find_state(
+        hass, "_avg_efficiency_rolling_7_days_factory_kwh_per_100km"
+    )
+    assert float(state.state) == pytest.approx(15.4)
+    assert state.attributes["partial_window_data"] is True
 
 
 async def test_avg_efficiency_window_actual_capacity_variant_uses_actual(

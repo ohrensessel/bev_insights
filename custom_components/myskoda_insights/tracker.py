@@ -320,10 +320,12 @@ class EntityHistory:
     # Read API ---------------------------------------------------------- #
 
     def delta_since(self, cutoff: datetime) -> float | None:
-        """Return `latest - baseline`, or None.
+        """Return `latest - baseline`, or None if there are no samples.
 
-        Baseline is the newest sample at or before `cutoff`; if no such
-        sample exists, return None.
+        Baseline is the newest sample at or before `cutoff`. When no such
+        sample exists (e.g. fresh install), falls back to the oldest
+        available sample so the sensor shows a partial value rather than
+        staying unavailable indefinitely.
         """
         if not self._samples:
             return None
@@ -335,7 +337,7 @@ class EntityHistory:
             else:
                 break
         if baseline_value is None:
-            return None
+            baseline_value = self._samples[0][1]
         return self._postprocess_delta(latest_value - baseline_value)
 
     def _postprocess_delta(self, raw_delta: float) -> float:
@@ -353,6 +355,10 @@ class EntityHistory:
     @property
     def latest_sample(self) -> tuple[datetime, float] | None:
         return self._samples[-1] if self._samples else None
+
+    def has_pre_window_sample(self, cutoff: datetime) -> bool:
+        """Return True if at least one sample predates the window cutoff."""
+        return bool(self._samples) and self._samples[0][0] <= cutoff
 
     # Internals --------------------------------------------------------- #
 
@@ -475,7 +481,7 @@ class SocHistory(EntityHistory):
             else:
                 break
         if anchor_index is None:
-            return None
+            anchor_index = 0
         consumed = 0.0
         previous_value = self._samples[anchor_index][1]
         for _, value in list(self._samples)[anchor_index + 1 :]:

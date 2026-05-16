@@ -1299,6 +1299,7 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
         return {
             "window": self._window_key,
             "window_start": cutoff.isoformat(),
+            "partial_window_data": not self._soc_history.has_pre_window_sample(cutoff),
             "capacity_variant": self._capacity_variant,
             "capacity_kwh": self._capacity.current(),
             "capacity_source": self._capacity.describe(),
@@ -1395,6 +1396,10 @@ class AverageEfficiencyWindowSensor(_WindowedSensor):
         return {
             "window": self._window_key,
             "window_start": cutoff.isoformat(),
+            "partial_window_data": (
+                not self._soc_history.has_pre_window_sample(cutoff)
+                or not self._mileage_history.has_pre_window_sample(cutoff)
+            ),
             "capacity_variant": self._capacity_variant,
             "unit_variant": self._unit_variant,
             "capacity_kwh": self._capacity.current(),
