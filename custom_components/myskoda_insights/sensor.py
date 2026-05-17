@@ -153,6 +153,7 @@ async def async_setup_entry(
                         tracker,
                         soc_entity,
                         mileage_entity,
+                        charging_entity,
                         capacity=capacity,
                         capacity_variant=capacity_variant,
                         unit_variant=unit_variant,
@@ -879,6 +880,10 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 
     Like the car-prediction efficiency, instantiated four times per
     config entry: {factory, actual} capacity × {kWh/100 km, km/kWh}.
+
+    Shares the same suppression rules as `MeasuredFullRangeSensor`:
+    unavailable while charging, and unavailable until the post-charge
+    drive crosses both the distance and SoC-consumed floors.
     """
 
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -889,11 +894,12 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         tracker: ChargeTracker,
         soc_entity: str,
         mileage_entity: str,
+        charging_entity: str,
         capacity: CapacitySource,
         capacity_variant: str,
         unit_variant: str,
     ) -> None:
-        sources = [soc_entity, mileage_entity]
+        sources = [soc_entity, mileage_entity, charging_entity]
         if capacity.source_entity:
             sources.append(capacity.source_entity)
         super().__init__(entry, sources)
@@ -927,6 +933,14 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 
     @callback
     def _recalculate(self) -> None:
+        # Suppress during charging: SoC rises back toward baseline, which
+        # makes soc_consumed shrink and the implied efficiency drift toward
+        # absurd values (high km/kWh, low kWh/100 km).
+        if self._tracker.is_charging:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
         baseline = self._tracker.baseline
         if baseline is None:
             self._attr_available = False
@@ -952,6 +966,16 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 
         distance_km = current_mileage - baseline_mileage
         soc_consumed = baseline_soc - current_soc
+
+        # Below these floors, SoC quantization makes the ratio too noisy
+        # to be meaningful — same rationale as MeasuredFullRangeSensor.
+        if (
+            distance_km < MIN_MEASURED_RANGE_KM
+            or soc_consumed < MIN_MEASURED_RANGE_SOC_PERCENT
+        ):
+            self._attr_available = False
+            self._attr_native_value = None
+            return
 
         value = _efficiency_value(
             capacity_kwh=capacity_kwh,

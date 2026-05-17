@@ -271,6 +271,66 @@ async def test_measured_efficiency_all_four_variants(hass: HomeAssistant) -> Non
     assert float(s.state) == pytest.approx(200 / 28.0, rel=1e-3)
 
 
+async def test_measured_efficiency_unavailable_while_charging(
+    hass: HomeAssistant,
+) -> None:
+    """Same suppression as the range sensor: charging → unavailable."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    hass.states.async_set(MILEAGE_ENTITY, "10200")
+    hass.states.async_set(SOC_ENTITY, "60")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_efficiency_factory_kwh_per_100km")
+    assert float(state.state) == pytest.approx(15.4, rel=1e-3)
+
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_efficiency_factory_kwh_per_100km")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_measured_efficiency_below_thresholds(
+    hass: HomeAssistant,
+) -> None:
+    """Short drive or tiny SoC delta → no value, even after a charge."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # 10 km / 5% SoC: distance under the 20 km floor.
+    hass.states.async_set(MILEAGE_ENTITY, "10010")
+    hass.states.async_set(SOC_ENTITY, "95")
+    await hass.async_block_till_done()
+    assert _find_state(
+        hass, "_measured_efficiency_factory_kwh_per_100km"
+    ).state in ("unavailable", "unknown")
+
+    # 50 km / 1% SoC: SoC under the 2% floor.
+    hass.states.async_set(MILEAGE_ENTITY, "10050")
+    hass.states.async_set(SOC_ENTITY, "99")
+    await hass.async_block_till_done()
+    assert _find_state(
+        hass, "_measured_efficiency_factory_kwh_per_100km"
+    ).state in ("unavailable", "unknown")
+
+    # 25 km / 5% SoC: both thresholds cleared. 77 × 5 / 25 = 15.4 kWh/100 km.
+    hass.states.async_set(MILEAGE_ENTITY, "10025")
+    hass.states.async_set(SOC_ENTITY, "95")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_efficiency_factory_kwh_per_100km")
+    assert float(state.state) == pytest.approx(15.4, rel=1e-3)
+
+
 async def test_full_battery_range_unavailable_on_missing_range(
     hass: HomeAssistant,
 ) -> None:
