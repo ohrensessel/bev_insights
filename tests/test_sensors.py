@@ -144,6 +144,104 @@ async def test_measured_full_range_after_charge_end(hass: HomeAssistant) -> None
     assert float(eff.state) == pytest.approx(15.4, rel=1e-3)
 
 
+async def test_measured_full_range_unavailable_while_charging(
+    hass: HomeAssistant,
+) -> None:
+    """Even with a healthy baseline and a valid drive, the sensor must be
+    unavailable while the car is plugged in and SoC is rising back."""
+    await _setup_full(hass)
+    # Establish a baseline at 100% SoC, 10000 km.
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # Drive 200 km, SoC down to 60% → sensor would normally show 500 km.
+    hass.states.async_set(MILEAGE_ENTITY, "10200")
+    hass.states.async_set(SOC_ENTITY, "60")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_full_range")
+    assert float(state.state) == pytest.approx(500.0, rel=1e-3)
+
+    # Now plug in again. SoC starts climbing; the sensor must suppress.
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_full_range")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_measured_full_range_below_distance_threshold(
+    hass: HomeAssistant,
+) -> None:
+    """A short drive (< MIN_MEASURED_RANGE_KM) must not produce a value."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # Only 10 km driven (below the 20 km floor), even though SoC consumed
+    # is well above the percent threshold.
+    hass.states.async_set(MILEAGE_ENTITY, "10010")
+    hass.states.async_set(SOC_ENTITY, "95")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_full_range")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_measured_full_range_below_soc_threshold(
+    hass: HomeAssistant,
+) -> None:
+    """A long drive with tiny SoC delta (< MIN_MEASURED_RANGE_SOC_PERCENT)
+    must not produce a value — typical of noisy 1% SoC quantization."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # 50 km driven (above the distance floor), but only 1% SoC consumed.
+    hass.states.async_set(MILEAGE_ENTITY, "10050")
+    hass.states.async_set(SOC_ENTITY, "99")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_full_range")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_measured_full_range_becomes_available_once_thresholds_met(
+    hass: HomeAssistant,
+) -> None:
+    """Just below the floor → unavailable; just above → available."""
+    await _setup_full(hass)
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # Below the distance threshold: 19 km driven, 5% SoC consumed.
+    hass.states.async_set(MILEAGE_ENTITY, "10019")
+    hass.states.async_set(SOC_ENTITY, "95")
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_measured_full_range").state in (
+        "unavailable",
+        "unknown",
+    )
+
+    # Cross both thresholds: 25 km driven, 5% SoC consumed → 500 km.
+    hass.states.async_set(MILEAGE_ENTITY, "10025")
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_measured_full_range")
+    assert float(state.state) == pytest.approx(500.0, rel=1e-3)
+
+
 async def test_measured_efficiency_all_four_variants(hass: HomeAssistant) -> None:
     """Cover every (capacity × unit) combination in one realistic drive."""
     await _setup_full(hass)

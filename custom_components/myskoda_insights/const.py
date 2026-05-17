@@ -24,6 +24,15 @@ DEFAULT_NAME = "MySkoda Insights"
 # this for their own vehicle.
 DEFAULT_CAPACITY_KWH = 77.0
 
+# Lower bounds before the post-charge measured range/efficiency is considered
+# trustworthy. SoC typically has 1% resolution, so a few km of driving may
+# yield a 0-1% delta whose ratio is dominated by quantization noise. The
+# distance floor and the SoC-consumed floor are complementary: a long drive
+# with little SoC change (slow downhill) and a short drive with a big SoC
+# change (cold start, accessories) are both filtered out.
+MIN_MEASURED_RANGE_KM = 20.0
+MIN_MEASURED_RANGE_SOC_PERCENT = 2.0
+
 # Custom units for efficiency. There's no standard HA unit constant for
 # energy-per-distance / distance-per-energy at this scale.
 UNIT_KWH_PER_100KM = "kWh/100 km"

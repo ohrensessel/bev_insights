@@ -138,6 +138,18 @@ class ChargeTracker:
         """
         return self._last_session
 
+    @property
+    def is_charging(self) -> bool:
+        """Return True if the vehicle is currently charging.
+
+        Read live from the charging-state entity so the answer reflects the
+        present moment, not the last edge transition the tracker observed.
+        """
+        # The bare `is_charging` below resolves to the module-level function
+        # imported at the top of this file, not to this property — Python
+        # looks up unqualified names in module scope.
+        return is_charging(self.hass.states.get(self._charging_entity))
+
     # ------------------------------------------------------------------ #
     # State-change handling                                              #
     # ------------------------------------------------------------------ #

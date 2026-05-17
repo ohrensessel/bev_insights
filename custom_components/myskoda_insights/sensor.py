@@ -43,10 +43,13 @@ from .const import (
     BASELINE_MILEAGE_KM,
     BASELINE_SOC_PERCENT,
     BASELINE_TIMESTAMP,
+    CONF_CHARGING_SENSOR,
     CONF_MILEAGE_SENSOR,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
     DOMAIN,
+    MIN_MEASURED_RANGE_KM,
+    MIN_MEASURED_RANGE_SOC_PERCENT,
     SESSION_END_SOC_PERCENT,
     SESSION_END_TIMESTAMP,
     SESSION_START_SOC_PERCENT,
@@ -112,9 +115,10 @@ async def async_setup_entry(
     # Tracker-dependent sensors only if the user wired up the prerequisites.
     if tracker is not None:
         mileage_entity: str = data[CONF_MILEAGE_SENSOR]
+        charging_entity: str = data[CONF_CHARGING_SENSOR]
         entities.append(
             MeasuredFullRangeSensor(
-                entry, tracker, soc_entity, mileage_entity
+                entry, tracker, soc_entity, mileage_entity, charging_entity
             )
         )
         entities.append(LastChargedSensor(entry, tracker))
@@ -559,8 +563,15 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         measured_full_range   = distance_since_charge / soc_consumed * 100
 
     Reflects real-world consumption rather than the car's range prediction.
-    Unavailable until a charging session has ended and the user has driven
-    far enough for `soc_consumed > 0`.
+
+    Unavailable when:
+      - no charging session has ended yet (no baseline),
+      - the vehicle is currently charging (SoC is rising back toward the
+        baseline, which makes `soc_consumed` shrink and the calculated
+        range explode toward infinity), or
+      - the post-charge drive hasn't produced enough data yet:
+        less than `MIN_MEASURED_RANGE_KM` driven or
+        less than `MIN_MEASURED_RANGE_SOC_PERCENT` consumed.
     """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
@@ -576,8 +587,12 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         tracker: ChargeTracker,
         soc_entity: str,
         mileage_entity: str,
+        charging_entity: str,
     ) -> None:
-        super().__init__(entry, [soc_entity, mileage_entity])
+        # Listen to the charging entity too so the sensor flips to/from
+        # unavailable at the instant charging starts or ends, rather than
+        # only when the next SoC tick lands.
+        super().__init__(entry, [soc_entity, mileage_entity, charging_entity])
         self._tracker = tracker
         self._soc_entity = soc_entity
         self._mileage_entity = mileage_entity
@@ -590,6 +605,13 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
 
     @callback
     def _recalculate(self) -> None:
+        # Suppress during charging: SoC is rising back toward baseline,
+        # which makes the ratio diverge and produces nonsense values.
+        if self._tracker.is_charging:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
         baseline = self._tracker.baseline
         if baseline is None:
             self._attr_available = False
@@ -613,9 +635,12 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         distance_km = current_mileage - baseline_mileage
         soc_consumed = baseline_soc - current_soc
 
-        # Need a positive amount of driving AND a positive amount of SoC
-        # actually used before the figure means anything.
-        if distance_km <= 0 or soc_consumed <= 0:
+        # Below these floors, SoC quantization (typically 1% steps) makes
+        # the ratio too noisy to be meaningful.
+        if (
+            distance_km < MIN_MEASURED_RANGE_KM
+            or soc_consumed < MIN_MEASURED_RANGE_SOC_PERCENT
+        ):
             self._attr_available = False
             self._attr_native_value = None
             return
