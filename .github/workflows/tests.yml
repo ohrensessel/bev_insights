@@ -72,7 +72,7 @@ jobs:
             plugin-spec: "pytest-homeassistant-custom-component"
             install-dev-ha: false
             experimental: false
-          - python-version: "3.13"
+          - python-version: "3.14"
             ha-target: dev
             plugin-spec: "pytest-homeassistant-custom-component"
             install-dev-ha: true
@@ -87,8 +87,12 @@ jobs:
           cache: pip
 
       - name: Install pytest plugin
+        # Upgrade setuptools/wheel before the plugin install, otherwise the
+        # `minimum` target trips a `pkgutil.ImpImporter` error: that attribute
+        # was removed in Python 3.12, and old setuptools shipped via a
+        # transitive build dependency still references it.
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install "${{ matrix.plugin-spec }}"
 
       - name: Override homeassistant with the dev branch
