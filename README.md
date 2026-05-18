@@ -152,3 +152,7 @@ reference back in v0.7. When upgrading from a v1 config entry:
 - The `CapacitySource` abstraction (`FixedCapacity` / `EntityCapacity`) allows sensors
   to call `.current()` per recalculation. `EntityCapacity` sensors additionally subscribe
   to their source entity's state changes so they recompute the instant the helper moves.
+
+## License
+
+[MIT](LICENSE) © Leo Krueger.
