@@ -150,6 +150,40 @@ async def test_energy_consumed_fresh_install_uses_oldest_as_anchor(
     assert state.attributes["partial_window_data"] is True
 
 
+async def test_energy_consumed_this_week_is_total_with_last_reset(
+    hass: HomeAssistant,
+) -> None:
+    """`this_week` variant uses state_class=TOTAL and exposes the current
+    week's Monday-00:00 as `last_reset` — clean LTS bookkeeping. The
+    `rolling_7_days` variant deliberately has no state_class because a
+    sliding window doesn't reset and HA rejects MEASUREMENT alongside
+    device_class=ENERGY."""
+    entry = await _setup_full(hass)
+    soc_history, _ = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(days=8), 80.0),
+            (now - timedelta(hours=1), 60.0),
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    weekly = _find_state(hass, "_energy_consumed_this_week_factory")
+    rolling = _find_state(hass, "_energy_consumed_rolling_7_days_factory")
+
+    # this_week: declared TOTAL, with last_reset matching the cutoff.
+    assert weekly.attributes["state_class"] == "total"
+    assert "last_reset" in weekly.attributes
+    assert weekly.attributes["last_reset"] == weekly.attributes["window_start"]
+
+    # rolling_7_days: no state_class at all (omitted on purpose).
+    assert "state_class" not in rolling.attributes
+
+
 async def test_energy_consumed_unavailable_when_actual_capacity_missing(
     hass: HomeAssistant,
 ) -> None:

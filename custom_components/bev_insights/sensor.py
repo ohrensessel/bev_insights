@@ -1289,10 +1289,21 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
 
     `soc_consumed_percent` comes from SocHistory.consumed_since() and
     correctly ignores upward SoC steps (i.e. charging) within the window.
+
+    State class differs by window shape:
+    - `this_week` is a calendar-bound total that resets at local Monday
+      00:00, so we declare `SensorStateClass.TOTAL` and update
+      `_attr_last_reset` to the current week's start on every recalc.
+      That gives HA's Long-Term Statistics a clean per-week curve.
+    - `rolling_7_days` slides continuously and can decrease as old
+      samples roll out of the window — neither TOTAL nor MEASUREMENT
+      describes it accurately, and HA rejects MEASUREMENT alongside
+      `device_class=ENERGY`. We leave the state class unset so the
+      recorder skips LTS for this one; it still shows up in the
+      energy-class UI like normal.
     """
 
     _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:lightning-bolt-circle"
     _attr_suggested_display_precision = 2
@@ -1317,6 +1328,8 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
         self._soc_history = soc_history
         self._capacity = capacity
         self._capacity_variant = capacity_variant
+        if window_key == "this_week":
+            self._attr_state_class = SensorStateClass.TOTAL
         self._attr_unique_id = (
             f"{entry.entry_id}_energy_consumed_"
             f"{window_key}_{capacity_variant}"
@@ -1332,6 +1345,9 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
     @callback
     def _recalculate(self) -> None:
         cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        if self._window_key == "this_week":
+            # cutoff IS the last reset point for the calendar-week variant.
+            self._attr_last_reset = cutoff
         consumed_pct = self._soc_history.consumed_since(cutoff)
         capacity_kwh = self._capacity.current()
         if consumed_pct is None or capacity_kwh is None:
