@@ -44,10 +44,39 @@ jobs:
         run: mypy
 
   pytest:
+    name: "pytest (py${{ matrix.python-version }}, HA ${{ matrix.ha-target }})"
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        # Three HA targets:
+        # - `minimum` exercises the floor declared in `hacs.json` so we
+        #   notice if production code starts using newer APIs.
+        # - `stable` tracks the latest released HA — what most users run.
+        # - `dev` installs HA from `core@dev`; allowed to fail so it
+        #   surfaces upcoming breakage without blocking PRs.
+        include:
+          - python-version: "3.12"
+            ha-target: minimum
+            plugin-spec: "pytest-homeassistant-custom-component==0.13.0"
+            install-dev-ha: false
+            experimental: false
+          - python-version: "3.12"
+            ha-target: stable
+            plugin-spec: "pytest-homeassistant-custom-component"
+            install-dev-ha: false
+            experimental: false
+          - python-version: "3.13"
+            ha-target: stable
+            plugin-spec: "pytest-homeassistant-custom-component"
+            install-dev-ha: false
+            experimental: false
+          - python-version: "3.13"
+            ha-target: dev
+            plugin-spec: "pytest-homeassistant-custom-component"
+            install-dev-ha: true
+            experimental: true
     steps:
       - uses: actions/checkout@v4
 
@@ -57,10 +86,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install dependencies
+      - name: Install pytest plugin
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements_test.txt
+          pip install "${{ matrix.plugin-spec }}"
+
+      - name: Override homeassistant with the dev branch
+        if: matrix.install-dev-ha
+        run: |
+          pip install --upgrade --force-reinstall \
+            "homeassistant @ git+https://github.com/home-assistant/core.git@dev"
 
       - name: Run pytest
         run: pytest -v
