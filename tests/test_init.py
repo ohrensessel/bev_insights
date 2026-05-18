@@ -1,14 +1,21 @@
 """Tests for `async_setup_entry`, `async_unload_entry`, `async_migrate_entry`."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myskoda_insights.const import (
+from custom_components.bev_insights.const import (
+    BASELINE_MILEAGE_KM,
+    BASELINE_SOC_PERCENT,
+    BASELINE_TIMESTAMP,
     CONF_CAPACITY_ACTUAL_ENTITY,
     CONFIG_ENTRY_VERSION,
     DOMAIN,
+    LEGACY_DOMAIN,
 )
 
 from .common import (
@@ -76,6 +83,136 @@ async def test_setup_without_optional_charging_mileage(hass: HomeAssistant) -> N
     domain_data = hass.data[DOMAIN][entry.entry_id]
     assert domain_data["tracker"] is None
     assert domain_data["mileage_history"] is None
+
+
+def _seed_legacy_storage(
+    hass: HomeAssistant,
+    hass_storage: dict,
+    key: str,
+    payload: dict,
+) -> Path:
+    """Set up a legacy storage entry that the migration code can discover.
+
+    Two parts are required, because the migration discovers candidates by
+    globbing `.storage/` and then reads their content via the HA `Store`
+    API. Under `pytest_homeassistant_custom_component`'s mocked storage,
+    Store reads come from `hass_storage` rather than disk — so we have to
+    populate both: a placeholder file (for the glob) and the mock dict
+    (for the load).
+    """
+    storage_dir = Path(hass.config.path(".storage"))
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    path = storage_dir / key
+    # Content of the placeholder file is irrelevant in mocked-storage
+    # tests; in production this is what Store actually reads.
+    path.write_text(
+        json.dumps(
+            {"version": 1, "minor_version": 1, "key": key, "data": payload}
+        )
+    )
+    hass_storage[key] = {"version": 1, "minor_version": 1, "key": key, "data": payload}
+    return path
+
+
+async def test_legacy_storage_is_migrated_to_new_domain_prefix(
+    hass: HomeAssistant,
+    hass_storage: dict,
+) -> None:
+    """Legacy myskoda_insights.* storage is rewritten under bev_insights.* and
+    the persisted charge baseline is read by the new tracker after setup."""
+    await _prime_states(hass)
+    legacy_key = f"{LEGACY_DOMAIN}.charge_tracker.some_old_entry_id"
+    legacy_path = _seed_legacy_storage(
+        hass,
+        hass_storage,
+        legacy_key,
+        {
+            BASELINE_MILEAGE_KM: 50000.0,
+            BASELINE_SOC_PERCENT: 80.0,
+            BASELINE_TIMESTAMP: "2026-05-01T12:00:00+00:00",
+        },
+    )
+    _seed_legacy_storage(
+        hass,
+        hass_storage,
+        f"{LEGACY_DOMAIN}.mileage_history.some_old_entry_id",
+        {"samples": []},
+    )
+
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+
+    # Legacy entries are cleaned up via Store.async_remove (which in real HA
+    # deletes the disk file; under mocked storage it clears the mock dict).
+    # The disk-file glob is silenced by also removing the stub via the mock.
+    _ = legacy_path  # disk stub kept around because async_remove is mocked
+    assert legacy_key not in hass_storage
+    new_charge_tracker_key = f"{DOMAIN}.charge_tracker.{entry.entry_id}"
+    assert new_charge_tracker_key in hass_storage
+    assert (
+        f"{DOMAIN}.mileage_history.{entry.entry_id}" in hass_storage
+    )
+
+    # And the tracker loaded the baseline that was in the legacy entry.
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    assert tracker.baseline == {
+        BASELINE_MILEAGE_KM: 50000.0,
+        BASELINE_SOC_PERCENT: 80.0,
+        BASELINE_TIMESTAMP: "2026-05-01T12:00:00+00:00",
+    }
+
+
+async def test_legacy_storage_migration_is_noop_when_new_data_exists(
+    hass: HomeAssistant,
+    hass_storage: dict,
+) -> None:
+    """If the new-domain key is already present, the legacy entry must stay
+    untouched — the migration is idempotent and does not clobber fresh data."""
+    await _prime_states(hass)
+
+    entry = make_entry()
+    legacy_key = f"{LEGACY_DOMAIN}.charge_tracker.some_old_entry_id"
+    legacy_path = _seed_legacy_storage(
+        hass,
+        hass_storage,
+        legacy_key,
+        {BASELINE_MILEAGE_KM: 99999.0, BASELINE_SOC_PERCENT: 99.0},
+    )
+    new_key = f"{DOMAIN}.charge_tracker.{entry.entry_id}"
+    _seed_legacy_storage(
+        hass,
+        hass_storage,
+        new_key,
+        {
+            BASELINE_MILEAGE_KM: 12345.0,
+            BASELINE_SOC_PERCENT: 50.0,
+            BASELINE_TIMESTAMP: "2026-05-10T08:00:00+00:00",
+        },
+    )
+
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+
+    assert legacy_path.exists()  # left alone
+    assert legacy_key in hass_storage  # not removed from mock either
+    # Loaded value comes from the new key, not the legacy one.
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 12345.0
+
+
+async def test_setup_without_legacy_storage_works(
+    hass: HomeAssistant,
+) -> None:
+    """Clean install (no legacy files) is the common path — must not error."""
+    await _prime_states(hass)
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][entry.entry_id]["tracker"].baseline is None
 
 
 async def test_migrate_v1_to_v2_flags_for_reconfigure(hass: HomeAssistant) -> None:

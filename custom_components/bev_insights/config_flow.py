@@ -1,4 +1,4 @@
-"""Config flow for MySkoda Insights."""
+"""Config flow for BEV Insights."""
 from __future__ import annotations
 
 from typing import Any
@@ -107,8 +107,8 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     return vol.Schema(fields)
 
 
-class MySkodaInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for MySkoda Insights."""
+class BevInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for BEV Insights."""
 
     VERSION = CONFIG_ENTRY_VERSION
 

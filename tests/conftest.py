@@ -1,7 +1,7 @@
-"""Shared fixtures for MySkoda Insights tests.
+"""Shared fixtures for BEV Insights tests.
 
 Wires up `pytest_homeassistant_custom_component` so each test gets a fresh
-`hass` instance and `custom_components/myskoda_insights/` is discovered as a
+`hass` instance and `custom_components/bev_insights/` is discovered as a
 custom integration.
 """
 from __future__ import annotations

@@ -15,7 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 import pytest
 
-from custom_components.myskoda_insights.const import (
+from custom_components.bev_insights.const import (
     DOMAIN,
     signal_mileage_history_updated,
     signal_soc_history_updated,

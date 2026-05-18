@@ -1,8 +1,44 @@
 # Changelog
 
-All notable changes to MySkoda Insights are documented here. Format
-loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+All notable changes to BEV Insights (formerly MySkoda Insights) are
+documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0]
+
+### Changed
+- **Breaking: renamed domain from `myskoda_insights` to `bev_insights`**.
+  The integration was always driven entirely by generic source entities
+  (SoC, range, charging-state, odometer), so the new name better reflects
+  what it actually does. The myskoda integration remains the only
+  upstream confirmed to work; reports from users of other BEV
+  integrations are welcome.
+- Base class renamed `MySkodaDerivedSensor` → `BevDerivedSensor`.
+- Display strings, manufacturer label, and translation keys updated
+  accordingly. The `LEGACY_DOMAIN` constant retains the old name so the
+  storage migration below can find legacy files.
+
+### Added
+- **One-time legacy-storage migration.** On first setup of `bev_insights`,
+  any `.storage/myskoda_insights.*` files found in HA's storage directory
+  are read through the `Store` API and re-written under the new domain
+  prefix keyed to the new config entry's `entry_id`. The legacy entries
+  are then removed. Persisted state surviving the rename: charge baseline,
+  last completed session, and 8 days of SoC + mileage history. Tested
+  end-to-end against `pytest_homeassistant_custom_component`'s mocked
+  storage.
+- HACS metadata (`hacs.json`) and `manifest.json` URLs point at the new
+  repository.
+
+### Migration steps for existing users
+
+1. Update the integration files.
+2. Restart HA. The old `MySkoda Insights` entry will fail to load
+   (its domain no longer exists in code) — leave it alone for now.
+3. Add the new `BEV Insights` integration with the same source entities;
+   the storage migration runs automatically and a warning is logged.
+4. Delete the orphaned old entry and any stale entities in the entity
+   registry.
 
 ## [0.9.0]
 

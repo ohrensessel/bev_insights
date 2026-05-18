@@ -5,7 +5,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.myskoda_insights.const import (
+from custom_components.bev_insights.const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,

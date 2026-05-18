@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "MySkoda Insights",
-        "description": "Pick the MySkoda sensors and battery capacities used to derive additional insights. The charging-state and mileage sensors are optional; without them the 'measured full range' sensor isn't created.",
+        "title": "BEV Insights",
+        "description": "Pick the source sensors and battery capacities used to derive additional insights. The charging-state and mileage sensors are optional; without them the 'measured full range' sensor isn't created.",
         "data": {
           "name": "Name",
           "soc_sensor": "Battery percentage (SoC) sensor",
@@ -21,7 +21,7 @@
         }
       },
       "reconfigure": {
-        "title": "MySkoda Insights",
+        "title": "BEV Insights",
         "description": "Update the sensors, charging tracker inputs and capacity values used for the calculations.",
         "data": {
           "name": "Name",

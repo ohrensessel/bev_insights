@@ -5,7 +5,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myskoda_insights.const import (
+from custom_components.bev_insights.const import (
     BASELINE_MILEAGE_KM,
     BASELINE_SOC_PERCENT,
     BASELINE_TIMESTAMP,
@@ -14,7 +14,7 @@ from custom_components.myskoda_insights.const import (
     SESSION_START_SOC_PERCENT,
     signal_baseline_updated,
 )
-from custom_components.myskoda_insights.tracker import ChargeTracker
+from custom_components.bev_insights.tracker import ChargeTracker
 
 CHARGING = "binary_sensor.car_charging"
 MILEAGE = "sensor.car_mileage"

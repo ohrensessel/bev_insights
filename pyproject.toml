@@ -4,7 +4,7 @@
 # not in scope. HA itself is typed via `homeassistant-stubs`.
 python_version = "3.12"
 strict = true
-files = ["custom_components/myskoda_insights"]
+files = ["custom_components/bev_insights"]
 
 [[tool.mypy.overrides]]
 module = ["pytest_homeassistant_custom_component.*", "voluptuous.*"]

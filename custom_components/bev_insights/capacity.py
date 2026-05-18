@@ -1,4 +1,4 @@
-"""Capacity sources for MySkoda Insights.
+"""Capacity sources for BEV Insights.
 
 Two flavours:
 - `FixedCapacity` returns a constant kWh value (used for the factory /

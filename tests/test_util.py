@@ -1,10 +1,10 @@
-"""Tests for `custom_components.myskoda_insights.util`."""
+"""Tests for `custom_components.bev_insights.util`."""
 from __future__ import annotations
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 
-from custom_components.myskoda_insights.util import (
+from custom_components.bev_insights.util import (
     is_charging,
     read_distance_km,
     read_float,

@@ -1,16 +1,26 @@
-"""The MySkoda Insights integration.
+"""The BEV Insights integration.
 
-Consumes sensors from the myskoda integration
-(https://github.com/skodaconnect/homeassistant-myskoda) and exposes
-additional derived sensors.
+Consumes a small set of source entities (SoC %, range km, optional
+charging-state, optional mileage) from any upstream integration and
+exposes derived sensors: full-battery range, state of health, efficiency
+in multiple unit variants, last charge added, rolling-window energy and
+distance, and more.
+
+Originally built against the myskoda integration
+(https://github.com/skodaconnect/homeassistant-myskoda); other source
+integrations should work as long as the required entities are present
+and report numeric states.
 """
 from __future__ import annotations
 
 import logging
+from pathlib import Path
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
 from .capacity import CapacitySource, EntityCapacity, FixedCapacity
 from .const import (
@@ -22,6 +32,8 @@ from .const import (
     CONFIG_ENTRY_VERSION,
     DEFAULT_CAPACITY_KWH,
     DOMAIN,
+    LEGACY_DOMAIN,
+    STORAGE_VERSION,
 )
 from .tracker import ChargeTracker, MileageHistory, SocHistory
 
@@ -29,10 +41,21 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
+# Suffixes appended to the domain prefix to form the three storage filenames
+# the integration writes. Kept in one place so the legacy-storage migration
+# below and the runtime code agree on the layout.
+_STORAGE_SUFFIXES: tuple[str, ...] = (
+    "charge_tracker",
+    "mileage_history",
+    "soc_history",
+)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up MySkoda Insights from a config entry."""
+    """Set up BEV Insights from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    await _migrate_legacy_storage(hass, entry)
 
     charging_entity = entry.data.get(CONF_CHARGING_SENSOR)
     mileage_entity = entry.data.get(CONF_MILEAGE_SENSOR)
@@ -115,7 +138,7 @@ async def async_migrate_entry(
     """
     if entry.version == 1:
         _LOGGER.warning(
-            "Migrating MySkoda Insights config entry to v2: please create "
+            "Migrating BEV Insights config entry to v2: please create "
             "an input_number helper with your actual remaining capacity "
             "(the previous value was %.2f kWh) and select it via "
             "Reconfigure on the integration card.",
@@ -135,3 +158,74 @@ async def async_migrate_entry(
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload integration when options or data change."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def _migrate_legacy_storage(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """One-time migration of .storage data from the legacy domain.
+
+    Prior to v1.0.0 this integration was named `myskoda_insights`. After
+    the rename to `bev_insights`, an existing HA install will have its
+    persisted state (charge baseline + last session, plus rolling SoC and
+    mileage histories) under the legacy storage prefix. Since the entry_id
+    changes when the user re-creates the config entry under the new
+    domain, the strategy is:
+
+      * Discover legacy storage filenames by globbing `.storage/`.
+      * For each `legacy_filename → new_key` pair, if the new key does not
+        yet hold data, read it through the Store API and write it back
+        under the new key (re-keying it to the current entry_id).
+      * Delete the legacy disk file afterwards.
+
+    Single-instance assumption: the integration is meant to be configured
+    once per vehicle. If a user happened to have multiple legacy entries
+    around, this picks an arbitrary one — the migration warning makes
+    that explicit. Re-runs are no-ops once the new keys hold data.
+
+    The split between disk-glob (for discovery) and Store-API (for data
+    movement) is what makes this code test-friendly: when running under
+    `pytest_homeassistant_custom_component`'s mocked storage, Store reads
+    and writes go through the in-memory mock dict while the disk glob
+    still finds whatever legacy filenames the test pre-created.
+    """
+    storage_dir = Path(hass.config.path(".storage"))
+
+    def _find_legacy_filenames() -> list[tuple[str, str]]:
+        if not storage_dir.is_dir():
+            return []
+        results: list[tuple[str, str]] = []
+        for suffix in _STORAGE_SUFFIXES:
+            matches = sorted(storage_dir.glob(f"{LEGACY_DOMAIN}.{suffix}.*"))
+            if matches:
+                results.append((matches[0].name, suffix))
+        return results
+
+    legacy_pairs = await hass.async_add_executor_job(_find_legacy_filenames)
+    if not legacy_pairs:
+        return
+
+    for legacy_filename, suffix in legacy_pairs:
+        new_key = f"{DOMAIN}.{suffix}.{entry.entry_id}"
+        new_store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, new_key)
+        if await new_store.async_load() is not None:
+            # New key already holds data — leave the legacy entry in place
+            # so the user can decide what to do with it manually.
+            continue
+        legacy_store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, legacy_filename
+        )
+        data = await legacy_store.async_load()
+        if data is not None:
+            await new_store.async_save(data)
+            _LOGGER.warning(
+                "BEV Insights: migrated legacy storage %s → %s "
+                "(rename from myskoda_insights to bev_insights)",
+                legacy_filename,
+                new_key,
+            )
+        # Cleanup: drop the legacy entry whether or not we migrated. In
+        # production async_remove deletes the disk file; in tests it
+        # clears the mocked dict. Either way, the legacy filename will
+        # not show up in the next migration scan.
+        await legacy_store.async_remove()

@@ -1,7 +1,12 @@
-"""Constants for the MySkoda Insights integration."""
+"""Constants for the BEV Insights integration."""
 from __future__ import annotations
 
-DOMAIN = "myskoda_insights"
+DOMAIN = "bev_insights"
+
+# Domain this integration was published under prior to v1.0.0. Referenced
+# only by the one-time storage migration in __init__.py; nothing else
+# should depend on it.
+LEGACY_DOMAIN = "myskoda_insights"
 
 # Config entry keys
 CONF_NAME = "name"
@@ -19,9 +24,11 @@ CONF_CAPACITY_ACTUAL_ENTITY = "capacity_actual_entity"
 # entries created by older versions.
 CONFIG_ENTRY_VERSION = 2
 
-DEFAULT_NAME = "MySkoda Insights"
+DEFAULT_NAME = "BEV Insights"
 # 77 kWh is the gross capacity of a typical Skoda Enyaq 85; users override
-# this for their own vehicle.
+# this for their own vehicle. The default is a sensible starting point for
+# the integration the project was originally built against; it is not
+# Skoda-specific.
 DEFAULT_CAPACITY_KWH = 77.0
 
 # Lower bounds before the post-charge measured range/efficiency is considered

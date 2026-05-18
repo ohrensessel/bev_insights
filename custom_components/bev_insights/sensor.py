@@ -1,9 +1,9 @@
-"""Derived sensors for MySkoda Insights.
+"""Derived sensors for BEV Insights.
 
-Each sensor reads values from existing myskoda entities and recomputes
-itself whenever those sources change state. Capacity-dependent sensors
-are instantiated once per configured battery capacity (factory-new vs.
-actual remaining).
+Each sensor reads values from existing source entities (SoC, range,
+optionally charging-state and mileage) and recomputes itself whenever
+those sources change state. Capacity-dependent sensors are instantiated
+once per configured battery capacity (factory-new vs. actual remaining).
 
 The "measured full range" sensor is wired up to the ChargeTracker via the
 HA dispatcher, so it also recomputes whenever a charging session ends and
@@ -75,7 +75,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up MySkoda Insights sensors from a config entry."""
+    """Set up BEV Insights sensors from a config entry."""
     domain_data = hass.data[DOMAIN][entry.entry_id]
     data = domain_data["data"]
     tracker: ChargeTracker | None = domain_data.get("tracker")
@@ -230,7 +230,7 @@ async def async_setup_entry(
 # --------------------------------------------------------------------------- #
 
 
-class MySkodaDerivedSensor(SensorEntity):
+class BevDerivedSensor(SensorEntity):
     """Base class for sensors that recompute when source entities change."""
 
     _attr_has_entity_name = True
@@ -247,7 +247,7 @@ class MySkodaDerivedSensor(SensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.entry_id)},
             name=self._entry.title,
-            manufacturer="MySkoda Insights",
+            manufacturer="BEV Insights",
             entry_type=DeviceEntryType.SERVICE,
         )
 
@@ -281,7 +281,7 @@ class MySkodaDerivedSensor(SensorEntity):
 # --------------------------------------------------------------------------- #
 
 
-class FullBatteryRangeSensor(MySkodaDerivedSensor):
+class FullBatteryRangeSensor(BevDerivedSensor):
     """Electric range extrapolated to a 100% state of charge.
 
     Computed as:  range_at_100% = current_range / current_soc * 100
@@ -335,7 +335,7 @@ class FullBatteryRangeSensor(MySkodaDerivedSensor):
         }
 
 
-class StateOfHealthSensor(MySkodaDerivedSensor):
+class StateOfHealthSensor(BevDerivedSensor):
     """Battery health as a percentage of nameplate capacity.
 
         state_of_health = actual / factory * 100
@@ -392,7 +392,7 @@ class StateOfHealthSensor(MySkodaDerivedSensor):
 # --------------------------------------------------------------------------- #
 
 
-class EfficiencySensor(MySkodaDerivedSensor):
+class EfficiencySensor(BevDerivedSensor):
     """Implied driving efficiency derived from the car's range prediction.
 
         kWh/100 km = capacity * soc / range_km
@@ -556,7 +556,7 @@ class _TrackerLinkedMixin:
         )
 
 
-class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class MeasuredFullRangeSensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Range at 100% SoC, measured from actual driving since last charge.
 
         distance_since_charge = current_mileage_km - baseline_mileage_km
@@ -680,7 +680,7 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         return attrs
 
 
-class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class LastChargedSensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Diagnostic: timestamp + mileage/SoC at the last detected charge end."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
@@ -732,7 +732,7 @@ class LastChargedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         }
 
 
-class TimeSinceLastChargeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class TimeSinceLastChargeSensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Hours elapsed since the most recent charge end.
 
     Ticks once an hour so dashboards/automations don't need a template
@@ -796,7 +796,7 @@ class TimeSinceLastChargeSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         }
 
 
-class LastChargeAddedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class LastChargeAddedSensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Energy added during the most recently completed charge session.
 
         kWh_added = capacity * (end_soc - start_soc) / 100
@@ -870,7 +870,7 @@ class LastChargeAddedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         }
 
 
-class MeasuredEfficiencySensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class MeasuredEfficiencySensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Implied efficiency from real driving since the last charge end.
 
     Uses the same `_efficiency_value` math as `EfficiencySensor`, but
@@ -1042,7 +1042,7 @@ def _local_week_start(now_utc: datetime, hass: HomeAssistant) -> datetime:
     return monday_local.astimezone(dt_util.UTC)
 
 
-class DistanceRolling7DaysSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class DistanceRolling7DaysSensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Kilometres driven in the trailing 7 days (rolling window).
 
     Always reflects "the last 168 hours of driving" rather than resetting
@@ -1122,7 +1122,7 @@ class DistanceRolling7DaysSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
         return attrs
 
 
-class DistanceThisWeekSensor(MySkodaDerivedSensor):
+class DistanceThisWeekSensor(BevDerivedSensor):
     """Kilometres driven since local Monday 00:00 (calendar week).
 
     Resets to 0 every Monday at midnight in the HA-configured timezone.
@@ -1218,7 +1218,7 @@ def _window_cutoff(
     return now_utc - timedelta(days=7)
 
 
-class _WindowedSensor(_TrackerLinkedMixin, MySkodaDerivedSensor):
+class _WindowedSensor(_TrackerLinkedMixin, BevDerivedSensor):
     """Common scaffolding for window-based sensors.
 
     Listens to both the SoC and the (optional) mileage history dispatchers,

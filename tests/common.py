@@ -1,11 +1,11 @@
-"""Helpers shared between MySkoda Insights test modules."""
+"""Helpers shared between BEV Insights test modules."""
 from __future__ import annotations
 
 from typing import Any
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myskoda_insights.const import (
+from custom_components.bev_insights.const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,

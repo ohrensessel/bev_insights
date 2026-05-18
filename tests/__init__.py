@@ -1,1 +1,1 @@
-"""Tests for the MySkoda Insights integration."""
+"""Tests for the BEV Insights integration."""

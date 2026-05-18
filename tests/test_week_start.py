@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from homeassistant.core import HomeAssistant
 import pytest
 
-from custom_components.myskoda_insights.sensor import _local_week_start
+from custom_components.bev_insights.sensor import _local_week_start
 
 
 @pytest.mark.parametrize(

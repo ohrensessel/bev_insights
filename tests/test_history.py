@@ -8,11 +8,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myskoda_insights.const import (
-    DOMAIN,
-    signal_mileage_history_updated,
-)
-from custom_components.myskoda_insights.tracker import MileageHistory, SocHistory
+from custom_components.bev_insights.const import DOMAIN, signal_mileage_history_updated
+from custom_components.bev_insights.tracker import MileageHistory, SocHistory
 
 
 def _entry() -> MockConfigEntry:

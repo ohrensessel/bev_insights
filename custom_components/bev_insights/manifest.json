@@ -1,0 +1,13 @@
+{
+  "domain": "bev_insights",
+  "name": "BEV Insights",
+  "version": "1.0.0",
+  "config_flow": true,
+  "documentation": "https://github.com/ohrensessel/bev_insights",
+  "issue_tracker": "https://github.com/ohrensessel/bev_insights/issues",
+  "codeowners": ["@ohrensessel"],
+  "dependencies": [],
+  "requirements": [],
+  "iot_class": "calculated",
+  "integration_type": "service"
+}

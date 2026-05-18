@@ -1,6 +1,6 @@
 name: deploy-to-ha
 
-# Manually-triggered deploy. Rsyncs custom_components/myskoda_insights/
+# Manually-triggered deploy. Rsyncs custom_components/bev_insights/
 # into /homeassistant/custom_components/ on the Home Assistant host
 # over SSH (the path the Advanced SSH & Web Terminal add-on mounts the
 # config dir at; the official SSH add-on uses /config/ instead).
@@ -77,10 +77,10 @@ jobs:
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             -e "ssh -i ~/.ssh/deploy_key -p ${HA_SSH_PORT:-22}" \
-            custom_components/myskoda_insights/ \
-            "${HA_USER}@${HA_HOST}:/homeassistant/custom_components/myskoda_insights/"
+            custom_components/bev_insights/ \
+            "${HA_USER}@${HA_HOST}:/homeassistant/custom_components/bev_insights/"
 
       - name: Summary
         run: |
-          echo "Deployed custom_components/myskoda_insights to ${{ secrets.HA_HOST }}:/homeassistant/custom_components/" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed custom_components/bev_insights to ${{ secrets.HA_HOST }}:/homeassistant/custom_components/" >> "$GITHUB_STEP_SUMMARY"
           echo "Restart HA manually to pick up the new code." >> "$GITHUB_STEP_SUMMARY"
