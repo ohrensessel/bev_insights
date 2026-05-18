@@ -1126,10 +1126,13 @@ class DistanceThisWeekSensor(BevDerivedSensor):
     """Kilometres driven since local Monday 00:00 (calendar week).
 
     Resets to 0 every Monday at midnight in the HA-configured timezone.
+    Declared `TOTAL` with `_attr_last_reset` set to the current week's
+    start on each recalc, so HA's Long-Term Statistics produces a clean
+    per-week distance curve.
     """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
     _attr_icon = "mdi:calendar-today"
     _attr_suggested_display_precision = 1
@@ -1168,6 +1171,7 @@ class DistanceThisWeekSensor(BevDerivedSensor):
     @callback
     def _recalculate(self) -> None:
         week_start = _local_week_start(dt_util.utcnow(), self.hass)
+        self._attr_last_reset = week_start
         # Prefer the history's baseline-aware lookup. If the user installed
         # the integration midweek and the deque starts after Monday, fall
         # back to "distance since first sample" — explicitly noting that

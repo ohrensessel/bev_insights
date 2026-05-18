@@ -250,6 +250,31 @@ async def test_distance_rolling_7d_unavailable_without_anchor(
 # --------------------------------------------------------------------------- #
 
 
+async def test_distance_this_week_is_total_with_last_reset(
+    hass: HomeAssistant,
+) -> None:
+    """Same shape as the weekly energy sensor: TOTAL + last_reset pointing
+    at the current week's Monday-00:00, for clean LTS bookkeeping."""
+    entry = await _setup_full(hass)
+    _, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [
+            (now - timedelta(days=30), 10000.0),
+            (now, 10042.5),
+        ]
+    )
+    hass.states.async_set(MILEAGE_ENTITY, "10042.5", {"unit_of_measurement": "km"})
+    await hass.async_block_till_done()
+
+    state = _find_state(hass, "_distance_this_week")
+    assert state.attributes["state_class"] == "total"
+    assert "last_reset" in state.attributes
+    assert state.attributes["last_reset"] == state.attributes["week_start"]
+
+
 async def test_distance_this_week_with_pre_week_anchor(
     hass: HomeAssistant,
 ) -> None:
