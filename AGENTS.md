@@ -23,11 +23,18 @@ Everything runs from the repo root with a virtualenv that has
 `requirements_test.txt` installed.
 
 ```bash
-pytest                    # full test suite (~6s, 108 tests)
+pytest                    # full test suite + coverage report (~7s, 118 tests)
+pytest --no-cov           # skip coverage for fast iteration
 ruff check custom_components tests
 mypy                      # config-driven, scopes to custom_components/
 python -m py_compile custom_components/bev_insights/*.py
 ```
+
+Coverage is wired into pytest's default addopts via `pyproject.toml`
+(`[tool.pytest.ini_options].addopts`). The terminal report shows
+uncovered lines inline so CI logs and local runs both answer "what's
+not tested" without an extra artifact. Pass `--no-cov` if you want
+zero-overhead test runs while iterating.
 
 CI runs three jobs in parallel: `lint` (ruff), `mypy`, and `pytest`
 (3.12 + 3.13 matrix). The same workflow exists under both

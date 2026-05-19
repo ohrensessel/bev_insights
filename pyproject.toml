@@ -14,7 +14,27 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+# Coverage runs by default; pass --no-cov for fast local iteration.
+# `--cov-report=term-missing` prints uncovered lines inline so CI logs
+# answer "which line did this miss?" without an extra artifact.
+addopts = "-ra --strict-markers --cov=custom_components.bev_insights --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+source = ["custom_components/bev_insights"]
+
+[tool.coverage.report]
+# Lines that only exist for type checkers, abstract stubs marked with
+# `pragma: no cover`, and a few HA hooks that aren't exercised in the
+# in-process test fixture (entity removal, debug logging fallbacks)
+# would otherwise inflate the "missed" count without adding signal.
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
+]
+show_missing = true
+skip_covered = false
 
 # Ruff config — mirrors Home Assistant core
 # (https://github.com/home-assistant/core/blob/dev/pyproject.toml)

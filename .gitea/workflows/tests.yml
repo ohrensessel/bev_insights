@@ -109,9 +109,11 @@ jobs:
         # doesn't have to have the system `tzdata` package — HA's tests
         # default the timezone to US/Pacific and fail with `Received
         # invalid time zone US/Pacific` otherwise.
+        # `pytest-cov` is wired into pytest's addopts (pyproject.toml), so
+        # it has to be present even on jobs that don't display coverage.
         run: |
           python -m pip install --upgrade pip
-          pip install "setuptools>=60,<80" wheel tzdata
+          pip install "setuptools>=60,<80" wheel tzdata "pytest-cov>=5.0"
           pip install "${{ matrix.plugin-spec }}"
 
       - name: Override homeassistant with the dev branch
