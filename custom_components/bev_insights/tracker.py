@@ -17,14 +17,20 @@ from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+
+if TYPE_CHECKING:
+    # Added to homeassistant.core in HA 2024.x; the integration's declared
+    # minimum predates it. Import only when type-checking so we can keep
+    # the precise annotation without breaking runtime imports on older HA.
+    from homeassistant.core import EventStateChangedData
 
 from .const import (
     BASELINE_MILEAGE_KM,

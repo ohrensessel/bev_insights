@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -28,7 +28,7 @@ from homeassistant.const import (
     UnitOfLength,
     UnitOfTime,
 )
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -37,6 +37,12 @@ from homeassistant.helpers.event import (
     async_track_time_change,
 )
 from homeassistant.util import dt as dt_util
+
+if TYPE_CHECKING:
+    # Added to homeassistant.core in HA 2024.x; the declared minimum
+    # predates it. Type-only import so we keep the precise annotation
+    # without breaking runtime imports on older HA versions.
+    from homeassistant.core import EventStateChangedData
 
 from .capacity import CapacitySource
 from .const import (
