@@ -57,14 +57,21 @@ jobs:
         # - `dev` installs HA from `core@dev`; allowed to fail so it
         #   surfaces upcoming breakage without blocking PRs.
         include:
-          # Python 3.11 here, not 3.12: HA 2024.1's transitive deps (numpy
-          # 1.23) only ship 3.11 wheels and can't build from source on 3.12+
-          # because `pkgutil.ImpImporter` was removed in 3.12. 3.11 was HA's
-          # recommended Python at the 2024.1 release, so this matches what
-          # users on the declared minimum actually run.
+          # Pinned to 0.13.100 (HA ~2024.7), not the earlier 0.13.0:
+          # - 0.13.0..~50 reference an `asyncio_legacy` submodule that
+          #   wasn't packaged in those releases (transitional bug around
+          #   pytest-asyncio's mode change in late 2023).
+          # - HA 2024.1's transitive deps also pull numpy 1.23 which has
+          #   no Python 3.12 wheels and can't build from source on 3.12.
+          # 0.13.100 sidesteps both. The hacs.json `homeassistant` floor
+          # is kept aligned with this pin so declared and tested minimums
+          # match.
+          # Python 3.11 was the HA-recommended Python at the 2024.7
+          # release; our production code uses no 3.12-only syntax so it
+          # stays compatible there.
           - python-version: "3.11"
             ha-target: minimum
-            plugin-spec: "pytest-homeassistant-custom-component==0.13.0"
+            plugin-spec: "pytest-homeassistant-custom-component==0.13.100"
             install-dev-ha: false
             experimental: false
           - python-version: "3.12"
