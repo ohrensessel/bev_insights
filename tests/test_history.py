@@ -173,6 +173,24 @@ async def test_prune_drops_samples_past_max_age(hass: HomeAssistant) -> None:
     assert history._samples[0][1] == 300.0
 
 
+async def test_max_age_days_param_overrides_default(hass: HomeAssistant) -> None:
+    """Custom max_age_days flows through to the prune cutoff."""
+    history = MileageHistory(
+        hass, _entry(), mileage_entity="sensor.odo", max_age_days=3
+    )
+    now = dt_util.utcnow()
+    history._samples.extend(
+        [
+            (now - timedelta(days=5), 100.0),  # outside the configured 3-day window
+            (now - timedelta(days=2), 200.0),
+            (now, 250.0),
+        ]
+    )
+    history._prune(now)
+    values = [v for _, v in history._samples]
+    assert values == [200.0, 250.0]
+
+
 # --------------------------------------------------------------------------- #
 # Persistence: async_save → async_load round-trip                             #
 # --------------------------------------------------------------------------- #

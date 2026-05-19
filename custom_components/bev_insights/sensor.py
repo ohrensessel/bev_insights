@@ -52,6 +52,8 @@ from .const import (
     BASELINE_TIMESTAMP,
     CONF_CHARGING_SENSOR,
     CONF_MILEAGE_SENSOR,
+    CONF_MIN_MEASURED_RANGE_KM,
+    CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
     DOMAIN,
@@ -614,6 +616,17 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, BevDerivedSensor):
         self._tracker = tracker
         self._soc_entity = soc_entity
         self._mileage_entity = mileage_entity
+        self._min_distance_km = float(
+            entry.options.get(
+                CONF_MIN_MEASURED_RANGE_KM, MIN_MEASURED_RANGE_KM
+            )
+        )
+        self._min_soc_percent = float(
+            entry.options.get(
+                CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
+                MIN_MEASURED_RANGE_SOC_PERCENT,
+            )
+        )
         self._attr_unique_id = f"{entry.entry_id}_measured_full_range"
         self._attr_name = "Measured full range"
 
@@ -656,8 +669,8 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, BevDerivedSensor):
         # Below these floors, SoC quantization (typically 1% steps) makes
         # the ratio too noisy to be meaningful.
         if (
-            distance_km < MIN_MEASURED_RANGE_KM
-            or soc_consumed < MIN_MEASURED_RANGE_SOC_PERCENT
+            distance_km < self._min_distance_km
+            or soc_consumed < self._min_soc_percent
         ):
             self._attr_available = False
             self._attr_native_value = None
@@ -1041,6 +1054,17 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, BevDerivedSensor):
         self._capacity = capacity
         self._capacity_variant = capacity_variant
         self._unit_variant = unit_variant
+        self._min_distance_km = float(
+            entry.options.get(
+                CONF_MIN_MEASURED_RANGE_KM, MIN_MEASURED_RANGE_KM
+            )
+        )
+        self._min_soc_percent = float(
+            entry.options.get(
+                CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
+                MIN_MEASURED_RANGE_SOC_PERCENT,
+            )
+        )
 
         unit_label, icon, precision = _unit_variant_props(unit_variant)
         self._attr_native_unit_of_measurement = unit_label
@@ -1102,8 +1126,8 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, BevDerivedSensor):
         # Below these floors, SoC quantization makes the ratio too noisy
         # to be meaningful — same rationale as MeasuredFullRangeSensor.
         if (
-            distance_km < MIN_MEASURED_RANGE_KM
-            or soc_consumed < MIN_MEASURED_RANGE_SOC_PERCENT
+            distance_km < self._min_distance_km
+            or soc_consumed < self._min_soc_percent
         ):
             self._attr_available = False
             self._attr_native_value = None

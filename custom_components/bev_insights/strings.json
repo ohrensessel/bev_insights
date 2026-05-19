@@ -45,6 +45,24 @@
       "reconfigure_successful": "Reconfiguration successful."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BEV Insights options",
+        "description": "Tune how strictly the measured-range sensors filter noisy data, and how far back the rolling-window sensors look. Defaults are good for typical use; only change them if you have a specific reason.",
+        "data": {
+          "min_measured_range_km": "Minimum distance after charging (km)",
+          "min_measured_range_soc_percent": "Minimum SoC consumed after charging (%)",
+          "history_days": "History retention window (days)"
+        },
+        "data_description": {
+          "min_measured_range_km": "The measured range and measured efficiency sensors stay unavailable until at least this much distance has been driven since the last charge end. Default 20 km.",
+          "min_measured_range_soc_percent": "And until at least this much SoC has been consumed. Default 2 %. Both floors apply; SoC quantization (~1% on most BEVs) dominates measurement error below them.",
+          "history_days": "How many days of SoC and odometer samples to retain on disk for the rolling-window sensors. Default 8 (one day past the 7-day window so there's always a pre-cutoff anchor). Going below 7 will leave the rolling-7-day sensors permanently in partial-data mode."
+        }
+      }
+    }
+  },
   "issues": {
     "v1_capacity_migration": {
       "title": "BEV Insights: reconfigure required for \"{title}\"",

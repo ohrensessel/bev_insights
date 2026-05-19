@@ -9,7 +9,10 @@ from custom_components.bev_insights.const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
+    CONF_HISTORY_DAYS,
     CONF_MILEAGE_SENSOR,
+    CONF_MIN_MEASURED_RANGE_KM,
+    CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     CONF_NAME,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
@@ -135,3 +138,34 @@ async def test_reconfigure_step_updates_entry(hass: HomeAssistant) -> None:
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert entry.data[CONF_CAPACITY_FACTORY] == 82.0
+
+
+async def test_options_flow_round_trip(hass: HomeAssistant) -> None:
+    """The options flow shows the form and persists submitted values."""
+    hass.states.async_set(SOC_ENTITY, "50")
+    hass.states.async_set(RANGE_ENTITY, "200")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "70.0")
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_MIN_MEASURED_RANGE_KM: 50.0,
+            CONF_MIN_MEASURED_RANGE_SOC_PERCENT: 5.0,
+            CONF_HISTORY_DAYS: 14,
+        },
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_MIN_MEASURED_RANGE_KM] == 50.0
+    assert entry.options[CONF_MIN_MEASURED_RANGE_SOC_PERCENT] == 5.0
+    assert entry.options[CONF_HISTORY_DAYS] == 14

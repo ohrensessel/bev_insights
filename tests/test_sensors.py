@@ -15,6 +15,8 @@ from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.bev_insights.const import (
+    CONF_MIN_MEASURED_RANGE_KM,
+    CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     DOMAIN,
     SESSION_END_SOC_PERCENT,
     SESSION_END_TIMESTAMP,
@@ -224,6 +226,48 @@ async def test_measured_full_range_below_soc_threshold(
     await hass.async_block_till_done()
     state = _find_state(hass, "_measured_full_range")
     assert state.state in ("unavailable", "unknown")
+
+
+async def test_measured_full_range_uses_options_threshold(
+    hass: HomeAssistant,
+) -> None:
+    """Custom threshold via entry.options overrides the module-level default.
+    50 km / 5 % drive normally passes the default 20 km / 2 % floor, but
+    not a stricter 100 km floor."""
+    hass.states.async_set(SOC_ENTITY, "50")
+    hass.states.async_set(RANGE_ENTITY, "200", {"unit_of_measurement": "km"})
+    hass.states.async_set(MILEAGE_ENTITY, "10000", {"unit_of_measurement": "km"})
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "70.0")
+    entry = make_entry()
+    # Set the stricter floor before setup so the sensor picks it up.
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            CONF_MIN_MEASURED_RANGE_KM: 100.0,
+            CONF_MIN_MEASURED_RANGE_SOC_PERCENT: 5.0,
+        },
+    )
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    hass.states.async_set(SOC_ENTITY, "100")
+    hass.states.async_set(MILEAGE_ENTITY, "10000")
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    # 50 km / 10 % SoC — would pass the default 20/2 floor, but fails
+    # the configured 100/5 floor on distance.
+    hass.states.async_set(MILEAGE_ENTITY, "10050")
+    hass.states.async_set(SOC_ENTITY, "90")
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_measured_full_range").state in (
+        "unavailable",
+        "unknown",
+    )
 
 
 async def test_measured_full_range_becomes_available_once_thresholds_met(

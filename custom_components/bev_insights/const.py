@@ -19,6 +19,13 @@ CONF_CAPACITY_FACTORY = "capacity_factory_kwh"
 # actual remaining capacity in kWh.
 CONF_CAPACITY_ACTUAL_ENTITY = "capacity_actual_entity"
 
+# Options-flow keys. Stored in `entry.options`, not `entry.data` — they
+# don't change what the integration is configured against (those are the
+# sensors above), only how strictly / how far back it analyses.
+CONF_MIN_MEASURED_RANGE_KM = "min_measured_range_km"
+CONF_MIN_MEASURED_RANGE_SOC_PERCENT = "min_measured_range_soc_percent"
+CONF_HISTORY_DAYS = "history_days"
+
 # Schema version of the config entry payload. Bumped when the shape of
 # `entry.data` changes incompatibly so `async_migrate_entry` can repair
 # entries created by older versions.

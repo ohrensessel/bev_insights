@@ -427,13 +427,14 @@ class MileageHistory(EntityHistory):
         hass: HomeAssistant,
         entry: ConfigEntry,
         mileage_entity: str,
+        max_age_days: int = MILEAGE_HISTORY_DAYS,
     ) -> None:
         super().__init__(
             hass,
             entry,
             source_entity=mileage_entity,
             storage_key_prefix=MILEAGE_HISTORY_KEY_PREFIX,
-            max_age_days=MILEAGE_HISTORY_DAYS,
+            max_age_days=max_age_days,
         )
 
     def _read(self) -> float | None:
@@ -466,13 +467,14 @@ class SocHistory(EntityHistory):
         hass: HomeAssistant,
         entry: ConfigEntry,
         soc_entity: str,
+        max_age_days: int = SOC_HISTORY_DAYS,
     ) -> None:
         super().__init__(
             hass,
             entry,
             source_entity=soc_entity,
             storage_key_prefix=SOC_HISTORY_KEY_PREFIX,
-            max_age_days=SOC_HISTORY_DAYS,
+            max_age_days=max_age_days,
         )
 
     def _read(self) -> float | None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 import voluptuous as vol
 
@@ -11,7 +12,10 @@ from .const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
+    CONF_HISTORY_DAYS,
     CONF_MILEAGE_SENSOR,
+    CONF_MIN_MEASURED_RANGE_KM,
+    CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     CONF_NAME,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
@@ -19,6 +23,9 @@ from .const import (
     DEFAULT_CAPACITY_KWH,
     DEFAULT_NAME,
     DOMAIN,
+    MILEAGE_HISTORY_DAYS,
+    MIN_MEASURED_RANGE_KM,
+    MIN_MEASURED_RANGE_SOC_PERCENT,
 )
 
 
@@ -112,6 +119,14 @@ class BevInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = CONFIG_ENTRY_VERSION
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> BevInsightsOptionsFlow:
+        """Expose the options flow on the integration card."""
+        return BevInsightsOptionsFlow(config_entry)
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
@@ -162,4 +177,75 @@ class BevInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=_schema(dict(entry.data)),
+        )
+
+
+def _options_schema(current: dict[str, Any]) -> vol.Schema:
+    """Schema for the options form. Defaults match the module-level constants."""
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_MIN_MEASURED_RANGE_KM,
+                default=current.get(
+                    CONF_MIN_MEASURED_RANGE_KM, MIN_MEASURED_RANGE_KM
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.0,
+                    max=200.0,
+                    step=1.0,
+                    unit_of_measurement="km",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
+                default=current.get(
+                    CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
+                    MIN_MEASURED_RANGE_SOC_PERCENT,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.0,
+                    max=50.0,
+                    step=0.5,
+                    unit_of_measurement="%",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_HISTORY_DAYS,
+                default=current.get(CONF_HISTORY_DAYS, MILEAGE_HISTORY_DAYS),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=2,
+                    max=60,
+                    step=1,
+                    unit_of_measurement="days",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
+class BevInsightsOptionsFlow(config_entries.OptionsFlow):
+    """Options flow: tune thresholds and history retention.
+
+    All three options have sensible defaults that match the values the
+    integration shipped with before they were made configurable; users
+    who don't touch this form get the same behaviour as before.
+    """
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_options_schema(dict(self.config_entry.options)),
         )

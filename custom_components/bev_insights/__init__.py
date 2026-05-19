@@ -28,12 +28,14 @@ from .const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
+    CONF_HISTORY_DAYS,
     CONF_MILEAGE_SENSOR,
     CONF_SOC_SENSOR,
     CONFIG_ENTRY_VERSION,
     DEFAULT_CAPACITY_KWH,
     DOMAIN,
     LEGACY_DOMAIN,
+    MILEAGE_HISTORY_DAYS,
     STORAGE_VERSION,
 )
 from .tracker import ChargeTracker, MileageHistory, SocHistory
@@ -64,6 +66,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     charging_entity = entry.data.get(CONF_CHARGING_SENSOR)
     mileage_entity = entry.data.get(CONF_MILEAGE_SENSOR)
+    history_days = int(
+        entry.options.get(CONF_HISTORY_DAYS, MILEAGE_HISTORY_DAYS)
+    )
 
     tracker: ChargeTracker | None = None
     if charging_entity and mileage_entity:
@@ -80,13 +85,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mileage_history: MileageHistory | None = None
     if mileage_entity:
         mileage_history = MileageHistory(
-            hass, entry, mileage_entity=mileage_entity
+            hass, entry, mileage_entity=mileage_entity, max_age_days=history_days
         )
         await mileage_history.async_load()
         mileage_history.async_start()
 
     soc_history = SocHistory(
-        hass, entry, soc_entity=entry.data[CONF_SOC_SENSOR]
+        hass,
+        entry,
+        soc_entity=entry.data[CONF_SOC_SENSOR],
+        max_age_days=history_days,
     )
     await soc_history.async_load()
     soc_history.async_start()

@@ -97,6 +97,18 @@ history has accumulated.
 | Charging-state sensor (optional) | No | Enables charge-tracker sensors. May be a `sensor` or `binary_sensor`. |
 | Mileage / odometer sensor (optional) | No | Enables charge-tracker and window sensors. |
 
+### Tuning the integration
+
+Open the integration card and click **Configure** to access the options form:
+
+| Option | Default | Notes |
+|---|---|---|
+| Minimum distance after charging | 20 km | Measured range / efficiency sensors stay unavailable until at least this much distance has been driven since the last charge end. |
+| Minimum SoC consumed after charging | 2 % | And until at least this much SoC has been consumed. Both floors apply — they trade off against each other. |
+| History retention window | 8 days | How many days of SoC and odometer samples to retain. Going below 7 leaves the rolling-7-day sensors permanently in `partial_window_data: true` mode. |
+
+Defaults are good for typical use; the floors filter out post-charge noise dominated by SoC quantization (~1% on most BEVs).
+
 ### Setting up the actual capacity entity
 
 Create a **Settings → Devices & Services → Helpers → Number** helper:
