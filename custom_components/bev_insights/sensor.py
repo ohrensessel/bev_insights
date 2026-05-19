@@ -544,6 +544,47 @@ def _efficiency_value(
     return round(energy_kwh / distance_km * 100.0, 2)
 
 
+def _post_charge_window(
+    tracker: ChargeTracker,
+    hass: HomeAssistant,
+    mileage_entity: str,
+    soc_entity: str,
+    min_distance_km: float,
+    min_soc_percent: float,
+) -> tuple[float, float] | None:
+    """Compute (distance_km, soc_consumed) since the last charge end.
+
+    Returns `None` when the sensor should be unavailable. Encodes the
+    full set of guards shared by `MeasuredFullRangeSensor` and
+    `MeasuredEfficiencySensor`:
+
+    1. The vehicle is currently charging — SoC is rising back toward the
+       baseline and the ratio diverges.
+    2. No charge session has ended yet (tracker has no baseline).
+    3. The baseline lacks one of the required fields.
+    4. The live source entities aren't reporting usable values.
+    5. The post-charge drive hasn't crossed both threshold floors.
+    """
+    if tracker.is_charging:
+        return None
+    baseline = tracker.baseline
+    if baseline is None:
+        return None
+    baseline_mileage = baseline.get(BASELINE_MILEAGE_KM)
+    baseline_soc = baseline.get(BASELINE_SOC_PERCENT)
+    if baseline_mileage is None or baseline_soc is None:
+        return None
+    current_mileage = read_distance_km(hass, mileage_entity)
+    current_soc = read_float(hass, soc_entity)
+    if current_mileage is None or current_soc is None:
+        return None
+    distance_km = current_mileage - baseline_mileage
+    soc_consumed = baseline_soc - current_soc
+    if distance_km < min_distance_km or soc_consumed < min_soc_percent:
+        return None
+    return distance_km, soc_consumed
+
+
 # --------------------------------------------------------------------------- #
 # Tracker-dependent sensors                                                   #
 # --------------------------------------------------------------------------- #
@@ -636,46 +677,19 @@ class MeasuredFullRangeSensor(_TrackerLinkedMixin, BevDerivedSensor):
 
     @callback
     def _recalculate(self) -> None:
-        # Suppress during charging: SoC is rising back toward baseline,
-        # which makes the ratio diverge and produces nonsense values.
-        if self._tracker.is_charging:
+        window = _post_charge_window(
+            self._tracker,
+            self.hass,
+            self._mileage_entity,
+            self._soc_entity,
+            self._min_distance_km,
+            self._min_soc_percent,
+        )
+        if window is None:
             self._attr_available = False
             self._attr_native_value = None
             return
-
-        baseline = self._tracker.baseline
-        if baseline is None:
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-
-        baseline_mileage = baseline.get(BASELINE_MILEAGE_KM)
-        baseline_soc = baseline.get(BASELINE_SOC_PERCENT)
-        if baseline_mileage is None or baseline_soc is None:
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-
-        current_mileage = read_distance_km(self.hass, self._mileage_entity)
-        current_soc = read_float(self.hass, self._soc_entity)
-        if current_mileage is None or current_soc is None:
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-
-        distance_km = current_mileage - baseline_mileage
-        soc_consumed = baseline_soc - current_soc
-
-        # Below these floors, SoC quantization (typically 1% steps) makes
-        # the ratio too noisy to be meaningful.
-        if (
-            distance_km < self._min_distance_km
-            or soc_consumed < self._min_soc_percent
-        ):
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-
+        distance_km, soc_consumed = window
         self._attr_available = True
         self._attr_native_value = round(distance_km / soc_consumed * 100.0, 1)
 
@@ -1102,49 +1116,20 @@ class MeasuredEfficiencySensor(_TrackerLinkedMixin, BevDerivedSensor):
 
     @callback
     def _recalculate(self) -> None:
-        # Suppress during charging: SoC rises back toward baseline, which
-        # makes soc_consumed shrink and the implied efficiency drift toward
-        # absurd values (high km/kWh, low kWh/100 km).
-        if self._tracker.is_charging:
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-
-        baseline = self._tracker.baseline
-        if baseline is None:
-            self._attr_available = False
-            self._attr_native_value = None
-            return
-
-        baseline_mileage = baseline.get(BASELINE_MILEAGE_KM)
-        baseline_soc = baseline.get(BASELINE_SOC_PERCENT)
-        current_mileage = read_distance_km(self.hass, self._mileage_entity)
-        current_soc = read_float(self.hass, self._soc_entity)
         capacity_kwh = self._capacity.current()
-
-        if (
-            baseline_mileage is None
-            or baseline_soc is None
-            or current_mileage is None
-            or current_soc is None
-            or capacity_kwh is None
-        ):
+        window = _post_charge_window(
+            self._tracker,
+            self.hass,
+            self._mileage_entity,
+            self._soc_entity,
+            self._min_distance_km,
+            self._min_soc_percent,
+        )
+        if capacity_kwh is None or window is None:
             self._attr_available = False
             self._attr_native_value = None
             return
-
-        distance_km = current_mileage - baseline_mileage
-        soc_consumed = baseline_soc - current_soc
-
-        # Below these floors, SoC quantization makes the ratio too noisy
-        # to be meaningful — same rationale as MeasuredFullRangeSensor.
-        if (
-            distance_km < self._min_distance_km
-            or soc_consumed < self._min_soc_percent
-        ):
-            self._attr_available = False
-            self._attr_native_value = None
-            return
+        distance_km, soc_consumed = window
 
         value = _efficiency_value(
             capacity_kwh=capacity_kwh,
