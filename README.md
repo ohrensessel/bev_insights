@@ -166,6 +166,16 @@ reference back in v0.7. When upgrading from a v1 config entry:
   to call `.current()` per recalculation. `EntityCapacity` sensors additionally subscribe
   to their source entity's state changes so they recompute the instant the helper moves.
 
+## Reporting issues
+
+When filing a bug, attaching the integration's diagnostics dump speeds up
+triage considerably. On the BEV Insights integration card, click the
+**⋮** menu → **Download diagnostics**. The downloaded JSON contains
+the resolved configuration, the charge-tracker baseline + last session,
+a summary of the rolling history buffers, and a snapshot of the source
+entity states. Identifying fields (entry title, unique id) are redacted
+automatically.
+
 ## License
 
 [MIT](LICENSE) © Leo Krueger.

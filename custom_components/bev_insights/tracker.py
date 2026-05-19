@@ -367,6 +367,10 @@ class EntityHistory:
         return bool(self._samples)
 
     @property
+    def sample_count(self) -> int:
+        return len(self._samples)
+
+    @property
     def oldest_sample(self) -> tuple[datetime, float] | None:
         return self._samples[0] if self._samples else None
 
