@@ -20,6 +20,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
 from .capacity import CapacitySource, EntityCapacity, FixedCapacity
@@ -54,6 +55,10 @@ _STORAGE_SUFFIXES: tuple[str, ...] = (
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up BEV Insights from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    # If a v1→v2 repair issue was filed by `async_migrate_entry`, the entry
+    # reaching setup means the user has reconfigured. Clear the issue.
+    ir.async_delete_issue(hass, DOMAIN, _v1_migration_issue_id(entry))
 
     await _migrate_legacy_storage(hass, entry)
 
@@ -137,12 +142,28 @@ async def async_migrate_entry(
     after being logged so the user can recreate it as an input_number.
     """
     if entry.version == 1:
+        old_kwh = float(entry.data.get("capacity_actual_kwh", 0.0))
         _LOGGER.warning(
             "Migrating BEV Insights config entry to v2: please create "
             "an input_number helper with your actual remaining capacity "
             "(the previous value was %.2f kWh) and select it via "
             "Reconfigure on the integration card.",
-            float(entry.data.get("capacity_actual_kwh", 0.0)),
+            old_kwh,
+        )
+        # Surface this in HA's Repairs panel so the user can't miss it.
+        # The issue is cleared by `async_setup_entry` on the first
+        # successful setup after reconfiguration.
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            _v1_migration_issue_id(entry),
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="v1_capacity_migration",
+            translation_placeholders={
+                "old_kwh": f"{old_kwh:.2f}",
+                "title": entry.title,
+            },
         )
         new_data = {k: v for k, v in entry.data.items() if k != "capacity_actual_kwh"}
         # HA changed how the entry version is bumped during migration:
@@ -172,6 +193,11 @@ async def async_migrate_entry(
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload integration when options or data change."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _v1_migration_issue_id(entry: ConfigEntry) -> str:
+    """Per-entry repair issue id for the v1→v2 capacity migration."""
+    return f"v1_capacity_migration_{entry.entry_id}"
 
 
 async def _migrate_legacy_storage(

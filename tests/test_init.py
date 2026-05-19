@@ -6,6 +6,7 @@ from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bev_insights.const import (
@@ -245,3 +246,41 @@ async def test_migrate_v1_to_v2_flags_for_reconfigure(hass: HomeAssistant) -> No
     assert entry.version == CONFIG_ENTRY_VERSION
     assert "capacity_actual_kwh" not in entry.data
     assert CONF_CAPACITY_ACTUAL_ENTITY not in entry.data
+
+    # A repair issue is filed with the old kWh value so the user can find
+    # it again when creating the helper.
+    issue_id = f"v1_capacity_migration_{entry.entry_id}"
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.translation_placeholders == {
+        "old_kwh": "68.50",
+        "title": "Old Entry",
+    }
+
+
+async def test_repair_issue_clears_on_successful_setup(
+    hass: HomeAssistant,
+) -> None:
+    """Once the user reconfigures and setup succeeds, the v1 repair issue
+    should be cleared automatically."""
+    await _prime_states(hass)
+
+    # Pre-seed an issue as though a previous migration attempt filed one.
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    issue_id = f"v1_capacity_migration_{entry.entry_id}"
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key="v1_capacity_migration",
+        translation_placeholders={"old_kwh": "68.50", "title": entry.title},
+    )
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
+
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None

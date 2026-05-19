@@ -45,6 +45,12 @@
       "reconfigure_successful": "Reconfiguration successful."
     }
   },
+  "issues": {
+    "v1_capacity_migration": {
+      "title": "BEV Insights: reconfigure required for \"{title}\"",
+      "description": "Your BEV Insights configuration uses the pre-v0.7 actual-capacity format (was a fixed number; now an entity reference). The previous value was **{old_kwh} kWh** — create an `input_number` helper with that value in **Settings → Devices & services → Helpers**, then open the BEV Insights integration card and click **Configure** to point it at the new helper. This repair entry will clear automatically once setup succeeds."
+    }
+  },
   "entity": {
     "sensor": {
       "full_battery_range": {
