@@ -138,14 +138,26 @@ class BevInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        entry = self._get_reconfigure_entry()
+        # `_get_reconfigure_entry` and `async_update_reload_and_abort` are
+        # ConfigFlow convenience helpers added after our declared minimum HA
+        # (2024.7). Use the longer-standing primitives instead: look up the
+        # entry from the flow context, update it, schedule a reload as a
+        # background task (matching what the helper does internally), and
+        # abort with the user-facing reason.
+        entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        if entry is None:
+            return self.async_abort(reason="unknown_entry")
 
         if user_input is not None:
-            return self.async_update_reload_and_abort(
-                entry,
-                title=user_input[CONF_NAME],
-                data=user_input,
+            self.hass.config_entries.async_update_entry(
+                entry, title=user_input[CONF_NAME], data=user_input
             )
+            self.hass.async_create_task(
+                self.hass.config_entries.async_reload(entry.entry_id)
+            )
+            return self.async_abort(reason="reconfigure_successful")
 
         return self.async_show_form(
             step_id="reconfigure",
