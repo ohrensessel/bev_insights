@@ -834,10 +834,15 @@ class LastChargeAddedSensor(_TrackerLinkedMixin, BevDerivedSensor):
     Available once a full off→on→off cycle has been observed. Negative
     deltas (battery somehow dropping during charge — API quirks) clamp to 0.
     Instantiated once per capacity variant.
+
+    Declared `TOTAL` with `_attr_last_reset` set to the session's start
+    timestamp, so HA's Long-Term Statistics interprets the value as
+    "energy delivered since session start" — exactly what it is.
+    MEASUREMENT alongside `device_class=ENERGY` is rejected by HA.
     """
 
     _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:battery-plus-variant"
     _attr_suggested_display_precision = 2
@@ -881,6 +886,14 @@ class LastChargeAddedSensor(_TrackerLinkedMixin, BevDerivedSensor):
             self._attr_available = False
             self._attr_native_value = None
             return
+
+        # last_reset advances to the start of each new session, so LTS
+        # treats each session as its own accumulation window.
+        start_ts = dt_util.parse_datetime(
+            session.get(SESSION_START_TIMESTAMP) or ""
+        )
+        if start_ts is not None:
+            self._attr_last_reset = start_ts
 
         soc_delta = max(0.0, end_soc - start_soc)
         self._attr_available = True

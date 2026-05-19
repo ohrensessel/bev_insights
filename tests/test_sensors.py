@@ -483,6 +483,11 @@ async def test_last_charge_added_after_cycle(hass: HomeAssistant) -> None:
     # Actual: 70 kWh × 50% = 35.0 kWh
     actual = _find_state(hass, "_last_charge_added_actual")
     assert float(actual.state) == pytest.approx(35.0)
+    # state_class=TOTAL + last_reset is the only valid combination with
+    # device_class=ENERGY; verify both attributes are present.
+    assert factory.attributes["state_class"] == "total"
+    assert "last_reset" in factory.attributes
+    assert factory.attributes["last_reset"] == factory.attributes["start_timestamp"]
 
 
 def _seed_session(
