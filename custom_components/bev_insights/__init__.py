@@ -145,9 +145,23 @@ async def async_migrate_entry(
             float(entry.data.get("capacity_actual_kwh", 0.0)),
         )
         new_data = {k: v for k, v in entry.data.items() if k != "capacity_actual_kwh"}
-        hass.config_entries.async_update_entry(
-            entry, data=new_data, version=CONFIG_ENTRY_VERSION
-        )
+        # HA changed how the entry version is bumped during migration:
+        # - On HA 2024.x, `entry.version` was a writable attribute and the
+        #   `version=` kwarg on `async_update_entry` didn't exist (or was a
+        #   silent no-op via **kwargs forwarding).
+        # - On HA 2025.x+, `entry.version` is a read-only property and the
+        #   only way to bump it is the `async_update_entry(version=...)`
+        #   kwarg.
+        # Try the older path first; AttributeError means we're on the newer
+        # HA and need the kwarg form.
+        try:
+            entry.version = CONFIG_ENTRY_VERSION
+        except AttributeError:
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, version=CONFIG_ENTRY_VERSION
+            )
+        else:
+            hass.config_entries.async_update_entry(entry, data=new_data)
         # Setup will fail without a capacity_actual_entity; flag the entry
         # as needing reconfiguration. HA will surface a "Reconfigure"
         # prompt to the user in the UI.
