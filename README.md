@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/logo.png" alt="BEV Insights" width="420">
+</p>
+
 # BEV Insights
 
 A Home Assistant custom integration that derives **up to 31 additional sensors** for a
