@@ -116,14 +116,13 @@ async def test_reconfigure_step_updates_entry(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     # `start_reconfigure_flow` is a MockConfigEntry shortcut added in a
-    # newer pytest-ha plugin release. Use the underlying HA-level API
-    # so the test works on the declared minimum HA too.
+    # newer pytest-ha plugin release. The HA-level API has been there for
+    # longer, but the `SOURCE_RECONFIGURE` constant was added after the
+    # declared minimum (2024.7) — its value has always been the literal
+    # "reconfigure", so use the string directly to stay compatible.
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={
-            "source": config_entries.SOURCE_RECONFIGURE,
-            "entry_id": entry.entry_id,
-        },
+        context={"source": "reconfigure", "entry_id": entry.entry_id},
     )
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "reconfigure"
