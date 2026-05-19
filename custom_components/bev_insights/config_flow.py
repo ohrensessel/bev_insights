@@ -1,6 +1,7 @@
 """Config flow for BEV Insights."""
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from homeassistant import config_entries
@@ -238,7 +239,13 @@ class BevInsightsOptionsFlow(config_entries.OptionsFlow):
     """
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        # HA changed `OptionsFlow.config_entry` from a writable attribute
+        # to a read-only property auto-populated by the OptionsFlowManager
+        # (the deprecation note in HA 2025.1 promised removal in 2025.12).
+        # On newer HA the property is read-only and `self.config_entry`
+        # works via the framework anyway, so swallow AttributeError.
+        with contextlib.suppress(AttributeError):
+            self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
