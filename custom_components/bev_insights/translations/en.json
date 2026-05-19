@@ -92,6 +92,12 @@
       "last_charge_added_actual": {
         "name": "Last charge added (actual capacity)"
       },
+      "avg_charging_power_factory": {
+        "name": "Average charging power (factory capacity)"
+      },
+      "avg_charging_power_actual": {
+        "name": "Average charging power (actual capacity)"
+      },
       "distance_rolling_7_days": {
         "name": "Distance driven (rolling 7 days)"
       },

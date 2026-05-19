@@ -1,6 +1,6 @@
 # BEV Insights
 
-A Home Assistant custom integration that derives **up to 25 additional sensors** for a
+A Home Assistant custom integration that derives **up to 31 additional sensors** for a
 battery-electric vehicle from a small set of source entities: battery percentage (SoC),
 remaining range, an optional charging-state indicator, and an optional odometer reading.
 
@@ -35,6 +35,7 @@ remaining range, an optional charging-state indicator, and an optional odometer 
 | Last charged | Timestamp of the last detected charge-end; mileage + SoC at that moment as attributes |
 | Time since last charge | Hours elapsed since the most recent charge end (advances hourly) |
 | Last charge added (factory, actual) | kWh added during the most recent completed charging session |
+| Average charging power (factory, actual) | kW averaged across the most recent completed session — `kWh_added / duration`. Useful for distinguishing AC vs. DC fast charging and spotting throttled chargers. |
 
 The measured-range and measured-efficiency sensors are suppressed during charging and for
 the first 20 km / 2 % SoC after a charge end — below those thresholds the calculation is

@@ -26,6 +26,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfEnergy,
     UnitOfLength,
+    UnitOfPower,
     UnitOfTime,
 )
 from homeassistant.core import Event, HomeAssistant, callback
@@ -130,13 +131,23 @@ async def async_setup_entry(
         entities.append(LastChargedSensor(entry, tracker))
         entities.append(TimeSinceLastChargeSensor(entry, tracker))
 
-        # Last charge added (kWh): one per capacity variant.
+        # Last charge added (kWh) and average charging power (kW): one of
+        # each per capacity variant. Both read from the same persisted
+        # session record and listen to the same baseline-updated signal.
         for capacity, capacity_variant in (
             (capacity_factory, VARIANT_FACTORY),
             (capacity_actual, VARIANT_ACTUAL),
         ):
             entities.append(
                 LastChargeAddedSensor(
+                    entry,
+                    tracker,
+                    capacity=capacity,
+                    capacity_variant=capacity_variant,
+                )
+            )
+            entities.append(
+                AverageChargingPowerSensor(
                     entry,
                     tracker,
                     capacity=capacity,
@@ -873,6 +884,121 @@ class LastChargeAddedSensor(_TrackerLinkedMixin, BevDerivedSensor):
             "end_soc_percent": session.get(SESSION_END_SOC_PERCENT),
             "start_timestamp": session.get(SESSION_START_TIMESTAMP),
             "end_timestamp": session.get(SESSION_END_TIMESTAMP),
+        }
+
+
+class AverageChargingPowerSensor(_TrackerLinkedMixin, BevDerivedSensor):
+    """Average power of the most recently completed charging session.
+
+        avg_kW = kWh_added / duration_hours
+               = capacity * (end_soc - start_soc) / 100 / duration_hours
+
+    Reflects the average — not instantaneous — power across the entire
+    last session, so it lumps the high-power ramp-up, the steady plateau,
+    and the tapered top-off into one figure. Useful for spotting whether
+    a session ran on AC (~3-11 kW) vs. DC fast charging (50+ kW), or for
+    flagging a charger that's throttling.
+
+    Instantiated once per capacity variant — same pattern as
+    `LastChargeAddedSensor`.
+    """
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_icon = "mdi:ev-station"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        tracker: ChargeTracker,
+        capacity: CapacitySource,
+        capacity_variant: str,
+    ) -> None:
+        sources = []
+        if capacity.source_entity:
+            sources.append(capacity.source_entity)
+        super().__init__(entry, sources)
+        self._tracker = tracker
+        self._capacity = capacity
+        self._capacity_variant = capacity_variant
+        self._attr_unique_id = (
+            f"{entry.entry_id}_avg_charging_power_{capacity_variant}"
+        )
+        self._attr_translation_key = f"avg_charging_power_{capacity_variant}"
+        self._attr_name = (
+            f"Average charging power ({capacity_variant} capacity)"
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+    @callback
+    def _recalculate(self) -> None:
+        session = self._tracker.last_session
+        capacity_kwh = self._capacity.current()
+        if session is None or capacity_kwh is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        start_soc = session.get(SESSION_START_SOC_PERCENT)
+        end_soc = session.get(SESSION_END_SOC_PERCENT)
+        start_ts = dt_util.parse_datetime(
+            session.get(SESSION_START_TIMESTAMP) or ""
+        )
+        end_ts = dt_util.parse_datetime(
+            session.get(SESSION_END_TIMESTAMP) or ""
+        )
+        if (
+            start_soc is None
+            or end_soc is None
+            or start_ts is None
+            or end_ts is None
+        ):
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        duration_hours = (end_ts - start_ts).total_seconds() / 3600.0
+        soc_delta = max(0.0, end_soc - start_soc)
+        # A "session" with no duration or no SoC gain isn't a real charging
+        # event for the purposes of this sensor (could be a momentary plug
+        # cycle, or a glitch in the source entity).
+        if duration_hours <= 0 or soc_delta <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+
+        kwh_added = capacity_kwh * soc_delta / 100.0
+        self._attr_available = True
+        self._attr_native_value = round(kwh_added / duration_hours, 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        session = self._tracker.last_session or {}
+        start_ts = dt_util.parse_datetime(
+            session.get(SESSION_START_TIMESTAMP) or ""
+        )
+        end_ts = dt_util.parse_datetime(
+            session.get(SESSION_END_TIMESTAMP) or ""
+        )
+        duration_hours: float | None = None
+        if start_ts is not None and end_ts is not None:
+            duration_hours = round(
+                (end_ts - start_ts).total_seconds() / 3600.0, 3
+            )
+        return {
+            "capacity_variant": self._capacity_variant,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
+            "start_soc_percent": session.get(SESSION_START_SOC_PERCENT),
+            "end_soc_percent": session.get(SESSION_END_SOC_PERCENT),
+            "start_timestamp": session.get(SESSION_START_TIMESTAMP),
+            "end_timestamp": session.get(SESSION_END_TIMESTAMP),
+            "duration_hours": duration_hours,
         }
 
 

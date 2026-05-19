@@ -6,10 +6,22 @@ expected formula output.
 """
 from __future__ import annotations
 
+from datetime import timedelta
 import math
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
 import pytest
+
+from custom_components.bev_insights.const import (
+    DOMAIN,
+    SESSION_END_SOC_PERCENT,
+    SESSION_END_TIMESTAMP,
+    SESSION_START_SOC_PERCENT,
+    SESSION_START_TIMESTAMP,
+    signal_baseline_updated,
+)
 
 from .common import (
     ACTUAL_CAPACITY_ENTITY,
@@ -427,6 +439,82 @@ async def test_last_charge_added_after_cycle(hass: HomeAssistant) -> None:
     # Actual: 70 kWh × 50% = 35.0 kWh
     actual = _find_state(hass, "_last_charge_added_actual")
     assert float(actual.state) == pytest.approx(35.0)
+
+
+def _seed_session(
+    hass: HomeAssistant,
+    entry,
+    *,
+    start_soc: float,
+    end_soc: float,
+    duration: timedelta,
+) -> None:
+    """Inject a known charging session into the tracker.
+
+    Tests that depend on session duration can't use the natural
+    off→on→off flow because both timestamps land in the same tick. This
+    pokes the tracker's `_last_session` directly with controlled values
+    and fires the dispatcher signal so subscribers recompute.
+    """
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    end_ts = dt_util.utcnow()
+    start_ts = end_ts - duration
+    tracker._last_session = {
+        SESSION_START_SOC_PERCENT: start_soc,
+        SESSION_END_SOC_PERCENT: end_soc,
+        SESSION_START_TIMESTAMP: start_ts.isoformat(),
+        SESSION_END_TIMESTAMP: end_ts.isoformat(),
+    }
+    async_dispatcher_send(hass, signal_baseline_updated(entry.entry_id))
+
+
+async def test_avg_charging_power_unavailable_without_session(
+    hass: HomeAssistant,
+) -> None:
+    await _setup_full(hass)
+    state = _find_state(hass, "_avg_charging_power_factory")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_avg_charging_power_after_cycle(hass: HomeAssistant) -> None:
+    """Session 30→80% over 2 h: 50% × 77 kWh / 2 h = 19.25 kW (factory)."""
+    entry = await _setup_full(hass)
+    _seed_session(
+        hass, entry, start_soc=30.0, end_soc=80.0, duration=timedelta(hours=2)
+    )
+    await hass.async_block_till_done()
+
+    factory = _find_state(hass, "_avg_charging_power_factory")
+    assert float(factory.state) == pytest.approx(19.25)
+    # Actual variant: 70 × 50 / 100 / 2 = 17.5 kW
+    actual = _find_state(hass, "_avg_charging_power_actual")
+    assert float(actual.state) == pytest.approx(17.5)
+
+
+async def test_avg_charging_power_zero_duration_is_unavailable(
+    hass: HomeAssistant,
+) -> None:
+    """A "session" with zero elapsed time isn't a meaningful charge."""
+    entry = await _setup_full(hass)
+    _seed_session(
+        hass, entry, start_soc=30.0, end_soc=80.0, duration=timedelta()
+    )
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_avg_charging_power_factory")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_avg_charging_power_zero_soc_delta_is_unavailable(
+    hass: HomeAssistant,
+) -> None:
+    """A "session" with no SoC gain (API glitch / unplug) isn't meaningful."""
+    entry = await _setup_full(hass)
+    _seed_session(
+        hass, entry, start_soc=80.0, end_soc=80.0, duration=timedelta(hours=1)
+    )
+    await hass.async_block_till_done()
+    state = _find_state(hass, "_avg_charging_power_factory")
+    assert state.state in ("unavailable", "unknown")
 
 
 # --------------------------------------------------------------------------- #
