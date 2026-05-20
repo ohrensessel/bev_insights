@@ -342,6 +342,24 @@
           "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
         }
       },
+      "standstill_ratio_rolling_7_days": {
+        "name": "Standstill ratio (rolling 7 days)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "total_soc_consumed_percent": { "name": "Total SoC consumed in window" },
+          "standstill_soc_consumed_percent": { "name": "Standstill SoC consumed in window" }
+        }
+      },
+      "standstill_ratio_this_week": {
+        "name": "Standstill ratio (this week)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "total_soc_consumed_percent": { "name": "Total SoC consumed this week" },
+          "standstill_soc_consumed_percent": { "name": "Standstill SoC consumed this week" }
+        }
+      },
       "session_log": {
         "name": "Session log",
         "state_attributes": {

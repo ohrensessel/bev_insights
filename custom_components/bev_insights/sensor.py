@@ -258,6 +258,19 @@ async def async_setup_entry(
                     )
                 )
 
+    # Standstill ratio sensors — needs both histories.
+    if soc_history is not None and mileage_history is not None:
+        for window_key, window_label in WINDOWS:
+            entities.append(
+                StandstillRatioWindowSensor(
+                    entry,
+                    soc_history,
+                    mileage_history,
+                    window_key=window_key,
+                    window_label=window_label,
+                )
+            )
+
     # Weekly average efficiency — needs both histories together.
     if soc_history is not None and mileage_history is not None:
         for window_key, window_label in WINDOWS:
@@ -1703,6 +1716,91 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
             "capacity_source": self._capacity.describe(),
             "soc_consumed_standstill_percent": (
                 round(consumed_pct, 2) if consumed_pct is not None else None
+            ),
+        }
+
+
+class StandstillRatioWindowSensor(_WindowedSensor):
+    """Fraction of total SoC consumption attributable to standstill (vampire) drain.
+
+        standstill_ratio = standstill_consumed / total_consumed * 100  [%]
+
+    Gives a quick answer to "how much of my battery is the car bleeding
+    away while parked vs. how much am I actually using for driving?"
+    A value near 0 % is good; higher values indicate parasitic drain.
+
+    Unavailable when either history is absent, total_consumed is zero
+    (no driving or charging data in the window), or when the car was
+    never parked during the window.
+
+    No capacity variants — the ratio is dimensionless.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:sleep"
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_history: SocHistory,
+        mileage_history: MileageHistory,
+        window_key: str,
+        window_label: str,
+    ) -> None:
+        super().__init__(
+            entry,
+            window_key,
+            window_label,
+            listen_soc_history=True,
+            listen_mileage_history=True,
+        )
+        self._soc_history = soc_history
+        self._mileage_history = mileage_history
+        self._threshold_km = float(
+            entry.options.get(
+                CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
+                STANDSTILL_MOVEMENT_THRESHOLD_KM,
+            )
+        )
+        self._attr_unique_id = f"{entry.entry_id}_standstill_ratio_{window_key}"
+        self._attr_translation_key = f"standstill_ratio_{window_key}"
+        self._attr_name = f"Standstill ratio ({window_label.lower()})"
+
+    @callback
+    def _recalculate(self) -> None:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        total = self._soc_history.consumed_since(cutoff)
+        standstill = self._soc_history.standstill_consumed_since(
+            cutoff, self._mileage_history, self._threshold_km
+        )
+        if total is None or standstill is None or total <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = round(standstill / total * 100.0, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        total = self._soc_history.consumed_since(cutoff)
+        standstill = self._soc_history.standstill_consumed_since(
+            cutoff, self._mileage_history, self._threshold_km
+        )
+        return {
+            "window": self._window_key,
+            "window_start": cutoff.isoformat(),
+            "partial_window_data": (
+                not self._soc_history.has_pre_window_sample(cutoff)
+                or not self._mileage_history.has_pre_window_sample(cutoff)
+            ),
+            "total_soc_consumed_percent": (
+                round(total, 2) if total is not None else None
+            ),
+            "standstill_soc_consumed_percent": (
+                round(standstill, 2) if standstill is not None else None
             ),
         }
 

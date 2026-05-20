@@ -342,6 +342,24 @@
           "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
         }
       },
+      "standstill_ratio_rolling_7_days": {
+        "name": "Stillstandsanteil (gleitende 7 Tage)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "total_soc_consumed_percent": { "name": "Gesamter SoC-Verbrauch im Fenster" },
+          "standstill_soc_consumed_percent": { "name": "SoC-Verbrauch im Stand im Fenster" }
+        }
+      },
+      "standstill_ratio_this_week": {
+        "name": "Stillstandsanteil (diese Woche)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "total_soc_consumed_percent": { "name": "Gesamter SoC-Verbrauch diese Woche" },
+          "standstill_soc_consumed_percent": { "name": "SoC-Verbrauch im Stand diese Woche" }
+        }
+      },
       "session_log": {
         "name": "Ladeprotokoll",
         "state_attributes": {
