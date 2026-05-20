@@ -51,6 +51,7 @@ from .const import (
     BASELINE_SOC_PERCENT,
     BASELINE_TIMESTAMP,
     CONF_CHARGING_SENSOR,
+    CONF_LOW_SOC_THRESHOLD_PERCENT,
     CONF_MILEAGE_SENSOR,
     CONF_MIN_MEASURED_RANGE_KM,
     CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
@@ -58,6 +59,7 @@ from .const import (
     CONF_SOC_SENSOR,
     CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
     DOMAIN,
+    LOW_SOC_THRESHOLD_PERCENT,
     MIN_MEASURED_RANGE_KM,
     MIN_MEASURED_RANGE_SOC_PERCENT,
     SESSION_END_SOC_PERCENT,
@@ -200,6 +202,10 @@ async def async_setup_entry(
         ("rolling_7_days", "Rolling 7 days"),
         ("this_week", "This week"),
     )
+
+    # Days-to-low-SoC estimate — needs SoC history only.
+    if soc_history is not None:
+        entities.append(DaysToLowSocSensor(entry, soc_history, soc_entity))
 
     # kWh consumed per window — needs SoC history only.
     if soc_history is not None:
@@ -1649,6 +1655,98 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
             "soc_consumed_standstill_percent": (
                 round(consumed_pct, 2) if consumed_pct is not None else None
             ),
+        }
+
+
+class DaysToLowSocSensor(BevDerivedSensor):
+    """Estimated days until SoC drops to the configured low-SoC threshold.
+
+        daily_avg_soc_pct = soc_consumed_past_7_days / 7
+        days_remaining    = (current_soc - low_threshold) / daily_avg_soc_pct
+
+    Uses the rolling-7-day average consumption rate as the projection basis.
+    Unavailable when current SoC is at or below the threshold, when there is
+    no consumption history, or when the 7-day average is zero.
+    """
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTime.DAYS
+    _attr_icon = "mdi:battery-clock"
+    _attr_suggested_display_precision = 1
+    _attr_translation_key = "days_to_low_soc"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_history: SocHistory,
+        soc_entity: str,
+    ) -> None:
+        super().__init__(entry, source_entities=[soc_entity])
+        self._soc_history = soc_history
+        self._soc_entity = soc_entity
+        self._threshold = float(
+            entry.options.get(CONF_LOW_SOC_THRESHOLD_PERCENT, LOW_SOC_THRESHOLD_PERCENT)
+        )
+        self._attr_unique_id = f"{entry.entry_id}_days_to_low_soc"
+        self._attr_name = "Days to low SoC"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _on_history_update() -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        @callback
+        def _on_tick(_now: datetime) -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_soc_history_updated(self._entry.entry_id),
+                _on_history_update,
+            )
+        )
+        self.async_on_remove(
+            async_track_time_change(self.hass, _on_tick, minute=0, second=0)
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        current_soc = read_float(self.hass, self._soc_entity)
+        if current_soc is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        cutoff = dt_util.utcnow() - timedelta(days=7)
+        consumed_7d = self._soc_history.consumed_since(cutoff)
+        if consumed_7d is None or consumed_7d <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        usable_soc = current_soc - self._threshold
+        if usable_soc <= 0:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = round(usable_soc / (consumed_7d / 7.0), 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        cutoff = dt_util.utcnow() - timedelta(days=7)
+        consumed_7d = self._soc_history.consumed_since(cutoff)
+        return {
+            "current_soc_percent": read_float(self.hass, self._soc_entity),
+            "low_soc_threshold_percent": self._threshold,
+            "daily_avg_soc_consumed_percent": (
+                round(consumed_7d / 7.0, 2) if consumed_7d is not None else None
+            ),
+            "window_days": 7,
         }
 
 

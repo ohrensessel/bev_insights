@@ -54,13 +54,15 @@
           "min_measured_range_km": "Mindestfahrtstrecke nach dem Laden (km)",
           "min_measured_range_soc_percent": "Minimaler SoC-Verbrauch nach dem Laden (%)",
           "history_days": "Verlauf-Aufbewahrungsfenster (Tage)",
-          "standstill_movement_threshold_km": "Erkennungsschwelle für geparktes Fahrzeug (km)"
+          "standstill_movement_threshold_km": "Erkennungsschwelle für geparktes Fahrzeug (km)",
+          "low_soc_threshold_percent": "Niedrig-SoC-Schwellwert (%)"
         },
         "data_description": {
           "min_measured_range_km": "Gemessene Reichweite und Effizienz bleiben nicht verfügbar, bis mindestens diese Strecke seit dem letzten Ladeende gefahren wurde. Standard: 20 km.",
           "min_measured_range_soc_percent": "Und bis mindestens dieser SoC-Anteil verbraucht wurde. Standard: 2 %. Beide Schwellwerte gelten; die SoC-Quantisierung (~1 % bei den meisten BEVs) dominiert den Messfehler darunter.",
           "history_days": "Wie viele Tage SoC- und Tachometerstand-Aufzeichnungen für die gleitenden Fenstermessungen aufbewahrt werden. Standard: 8. Werte unter 7 führen dazu, dass die 7-Tage-Sensoren dauerhaft im Teildaten-Modus bleiben.",
-          "standstill_movement_threshold_km": "Ein SoC-Abfall-Intervall wird nur dann als Stillstand (Vampire-Drain) gezählt, wenn der Tachometer weniger als diesen Schwellwert vorgerückt ist. Standard: 0,1 km. Auf 1,0 km erhöhen, wenn Ihre Integration den Kilometerstand in ganzen Kilometern meldet."
+          "standstill_movement_threshold_km": "Ein SoC-Abfall-Intervall wird nur dann als Stillstand (Vampire-Drain) gezählt, wenn der Tachometer weniger als diesen Schwellwert vorgerückt ist. Standard: 0,1 km. Auf 1,0 km erhöhen, wenn Ihre Integration den Kilometerstand in ganzen Kilometern meldet.",
+          "low_soc_threshold_percent": "Der Sensor Tage bis niedriger SoC schätzt, wann der SoC auf diesen Wert fällt. Standard: 20 %. Niedrigere Werte geben eine engere Schätzung; höhere Werte liefern mehr Vorwarnzeit."
         }
       }
     }
@@ -338,6 +340,15 @@
           "capacity_kwh": { "name": "Kapazität" },
           "capacity_source": { "name": "Kapazitätsquelle" },
           "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
+        }
+      },
+      "days_to_low_soc": {
+        "name": "Tage bis niedriger SoC",
+        "state_attributes": {
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "low_soc_threshold_percent": { "name": "Niedrig-SoC-Schwellwert" },
+          "daily_avg_soc_consumed_percent": { "name": "Täglicher Ø SoC-Verbrauch (7 Tage)" },
+          "window_days": { "name": "Mittelungsfenster (Tage)" }
         }
       },
       "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {

@@ -26,6 +26,7 @@ CONF_MIN_MEASURED_RANGE_KM = "min_measured_range_km"
 CONF_MIN_MEASURED_RANGE_SOC_PERCENT = "min_measured_range_soc_percent"
 CONF_HISTORY_DAYS = "history_days"
 CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM = "standstill_movement_threshold_km"
+CONF_LOW_SOC_THRESHOLD_PERCENT = "low_soc_threshold_percent"
 
 # Schema version of the config entry payload. Bumped when the shape of
 # `entry.data` changes incompatibly so `async_migrate_entry` can repair
@@ -52,6 +53,10 @@ MIN_MEASURED_RANGE_SOC_PERCENT = 2.0
 # that report mileage in whole kilometres (each sample either stays flat or
 # jumps by ≥1 km), while still ignoring true creep-in-traffic.
 STANDSTILL_MOVEMENT_THRESHOLD_KM = 0.1
+# SoC level treated as "empty" for the days-to-low-SoC estimate. 20% gives
+# a comfortable margin above the real floor and matches what most BEV drivers
+# use as a practical minimum before seeking a charger.
+LOW_SOC_THRESHOLD_PERCENT = 20.0
 
 # Custom units for efficiency. There's no standard HA unit constant for
 # energy-per-distance / distance-per-energy at this scale.

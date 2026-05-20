@@ -14,6 +14,7 @@ from .const import (
     CONF_CAPACITY_FACTORY,
     CONF_CHARGING_SENSOR,
     CONF_HISTORY_DAYS,
+    CONF_LOW_SOC_THRESHOLD_PERCENT,
     CONF_MILEAGE_SENSOR,
     CONF_MIN_MEASURED_RANGE_KM,
     CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
@@ -25,6 +26,7 @@ from .const import (
     DEFAULT_CAPACITY_KWH,
     DEFAULT_NAME,
     DOMAIN,
+    LOW_SOC_THRESHOLD_PERCENT,
     MILEAGE_HISTORY_DAYS,
     MIN_MEASURED_RANGE_KM,
     MIN_MEASURED_RANGE_SOC_PERCENT,
@@ -240,6 +242,21 @@ def _options_schema(current: dict[str, Any]) -> vol.Schema:
                     max=5.0,
                     step=0.1,
                     unit_of_measurement="km",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_LOW_SOC_THRESHOLD_PERCENT,
+                default=current.get(
+                    CONF_LOW_SOC_THRESHOLD_PERCENT,
+                    LOW_SOC_THRESHOLD_PERCENT,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.0,
+                    max=50.0,
+                    step=1.0,
+                    unit_of_measurement="%",
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
