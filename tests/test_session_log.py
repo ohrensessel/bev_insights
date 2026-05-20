@@ -1,13 +1,10 @@
 """Tests for SessionLogSensor and ChargeTracker session log."""
 from __future__ import annotations
 
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
-from custom_components.bev_insights.const import (
-    DOMAIN,
-    SESSION_LOG_MAX,
-)
+from custom_components.bev_insights.const import SESSION_LOG_MAX
 
 from .common import (
     ACTUAL_CAPACITY_ENTITY,
@@ -101,5 +98,4 @@ async def test_session_log_diagnostic_category(hass: HomeAssistant) -> None:
         for e in hass.data["entity_registry"].entities.values()
         if e.config_entry_id == entry.entry_id and e.unique_id.endswith("_session_log")
     )
-    from homeassistant.const import EntityCategory
     assert registry_entry.entity_category == EntityCategory.DIAGNOSTIC

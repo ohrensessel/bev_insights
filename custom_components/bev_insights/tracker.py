@@ -55,8 +55,8 @@ from .const import (
     signal_soc_history_updated,
 )
 from .util import (
-    INVALID_STATES,
     _DISTANCE_TO_KM,
+    INVALID_STATES,
     is_charging,
     read_distance_km,
     read_float,

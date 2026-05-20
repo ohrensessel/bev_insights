@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
+from .backfill import async_backfill_from_recorder
 from .capacity import CapacitySource, EntityCapacity, FixedCapacity
 from .const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
@@ -38,7 +39,6 @@ from .const import (
     MILEAGE_HISTORY_DAYS,
     STORAGE_VERSION,
 )
-from .backfill import async_backfill_from_recorder
 from .tracker import ChargeTracker, MileageHistory, SocHistory
 
 _LOGGER = logging.getLogger(__name__)

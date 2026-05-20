@@ -47,8 +47,10 @@ async def async_backfill_from_recorder(
     start_time = dt_util.utcnow() - timedelta(days=days)
 
     try:
-        from homeassistant.components.recorder import get_instance
-        from homeassistant.components.recorder import history as rec_history  # noqa: PLC0415
+        from homeassistant.components.recorder import (  # noqa: PLC0415
+            get_instance,
+            history as rec_history,
+        )
 
         def _fetch():
             states = rec_history.state_changes_during_period(
