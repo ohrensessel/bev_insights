@@ -74,109 +74,359 @@
   "entity": {
     "sensor": {
       "full_battery_range": {
-        "name": "Full battery range"
+        "name": "Full battery range",
+        "state_attributes": {
+          "current_soc_percent": { "name": "Current SoC" },
+          "current_range_km": { "name": "Current range" },
+          "soc_source": { "name": "SoC source entity" },
+          "range_source": { "name": "Range source entity" }
+        }
       },
       "state_of_health": {
-        "name": "State of Health"
+        "name": "State of Health",
+        "state_attributes": {
+          "capacity_factory_kwh": { "name": "Factory capacity" },
+          "capacity_actual_kwh": { "name": "Actual capacity" },
+          "capacity_actual_source": { "name": "Actual capacity source" }
+        }
       },
       "time_since_last_charge": {
-        "name": "Time since last charge"
+        "name": "Time since last charge",
+        "state_attributes": {
+          "last_charge_timestamp": { "name": "Last charge ended" }
+        }
       },
       "efficiency_factory_kwh_per_100km": {
-        "name": "Efficiency (factory capacity, kWh/100 km)"
+        "name": "Efficiency (factory capacity, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "current_soc_percent": { "name": "Current SoC" },
+          "current_range_km": { "name": "Current range" }
+        }
       },
       "efficiency_factory_km_per_kwh": {
-        "name": "Efficiency (factory capacity, km/kWh)"
+        "name": "Efficiency (factory capacity, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "current_soc_percent": { "name": "Current SoC" },
+          "current_range_km": { "name": "Current range" }
+        }
       },
       "efficiency_actual_kwh_per_100km": {
-        "name": "Efficiency (actual capacity, kWh/100 km)"
+        "name": "Efficiency (actual capacity, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "current_soc_percent": { "name": "Current SoC" },
+          "current_range_km": { "name": "Current range" }
+        }
       },
       "efficiency_actual_km_per_kwh": {
-        "name": "Efficiency (actual capacity, km/kWh)"
+        "name": "Efficiency (actual capacity, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "current_soc_percent": { "name": "Current SoC" },
+          "current_range_km": { "name": "Current range" }
+        }
       },
       "measured_full_range": {
-        "name": "Measured full range"
+        "name": "Measured full range",
+        "state_attributes": {
+          "baseline_mileage_km": { "name": "Odometer at charge end" },
+          "baseline_soc_percent": { "name": "SoC at charge end" },
+          "baseline_timestamp": { "name": "Charge end time" },
+          "current_mileage_km": { "name": "Current odometer" },
+          "current_soc_percent": { "name": "Current SoC" },
+          "distance_since_last_charge_km": { "name": "Distance since last charge" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC consumed since last charge" }
+        }
       },
       "measured_efficiency_factory_kwh_per_100km": {
-        "name": "Measured efficiency (factory capacity, kWh/100 km)"
+        "name": "Measured efficiency (factory capacity, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "baseline_mileage_km": { "name": "Odometer at charge end" },
+          "baseline_soc_percent": { "name": "SoC at charge end" },
+          "baseline_timestamp": { "name": "Charge end time" },
+          "distance_since_last_charge_km": { "name": "Distance since last charge" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC consumed since last charge" }
+        }
       },
       "measured_efficiency_factory_km_per_kwh": {
-        "name": "Measured efficiency (factory capacity, km/kWh)"
+        "name": "Measured efficiency (factory capacity, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "baseline_mileage_km": { "name": "Odometer at charge end" },
+          "baseline_soc_percent": { "name": "SoC at charge end" },
+          "baseline_timestamp": { "name": "Charge end time" },
+          "distance_since_last_charge_km": { "name": "Distance since last charge" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC consumed since last charge" }
+        }
       },
       "measured_efficiency_actual_kwh_per_100km": {
-        "name": "Measured efficiency (actual capacity, kWh/100 km)"
+        "name": "Measured efficiency (actual capacity, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "baseline_mileage_km": { "name": "Odometer at charge end" },
+          "baseline_soc_percent": { "name": "SoC at charge end" },
+          "baseline_timestamp": { "name": "Charge end time" },
+          "distance_since_last_charge_km": { "name": "Distance since last charge" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC consumed since last charge" }
+        }
       },
       "measured_efficiency_actual_km_per_kwh": {
-        "name": "Measured efficiency (actual capacity, km/kWh)"
+        "name": "Measured efficiency (actual capacity, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "baseline_mileage_km": { "name": "Odometer at charge end" },
+          "baseline_soc_percent": { "name": "SoC at charge end" },
+          "baseline_timestamp": { "name": "Charge end time" },
+          "distance_since_last_charge_km": { "name": "Distance since last charge" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC consumed since last charge" }
+        }
       },
       "last_charged": {
-        "name": "Last charged"
+        "name": "Last charged",
+        "state_attributes": {
+          "mileage_km": { "name": "Odometer at charge end" },
+          "soc_percent": { "name": "SoC at charge end" }
+        }
       },
       "last_charge_added_factory": {
-        "name": "Last charge added (factory capacity)"
+        "name": "Last charge added (factory capacity)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "start_soc_percent": { "name": "SoC at session start" },
+          "end_soc_percent": { "name": "SoC at session end" },
+          "start_timestamp": { "name": "Session start" },
+          "end_timestamp": { "name": "Session end" }
+        }
       },
       "last_charge_added_actual": {
-        "name": "Last charge added (actual capacity)"
+        "name": "Last charge added (actual capacity)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "start_soc_percent": { "name": "SoC at session start" },
+          "end_soc_percent": { "name": "SoC at session end" },
+          "start_timestamp": { "name": "Session start" },
+          "end_timestamp": { "name": "Session end" }
+        }
       },
       "avg_charging_power_factory": {
-        "name": "Average charging power (factory capacity)"
+        "name": "Average charging power (factory capacity)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "start_soc_percent": { "name": "SoC at session start" },
+          "end_soc_percent": { "name": "SoC at session end" },
+          "start_timestamp": { "name": "Session start" },
+          "end_timestamp": { "name": "Session end" },
+          "duration_hours": { "name": "Session duration (h)" }
+        }
       },
       "avg_charging_power_actual": {
-        "name": "Average charging power (actual capacity)"
+        "name": "Average charging power (actual capacity)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "start_soc_percent": { "name": "SoC at session start" },
+          "end_soc_percent": { "name": "SoC at session end" },
+          "start_timestamp": { "name": "Session start" },
+          "end_timestamp": { "name": "Session end" },
+          "duration_hours": { "name": "Session duration (h)" }
+        }
       },
       "distance_rolling_7_days": {
-        "name": "Distance driven (rolling 7 days)"
+        "name": "Distance driven (rolling 7 days)",
+        "state_attributes": {
+          "oldest_sample_timestamp": { "name": "Oldest sample time" },
+          "oldest_sample_mileage_km": { "name": "Oldest sample odometer" }
+        }
       },
       "distance_this_week": {
-        "name": "Distance driven (this week)"
+        "name": "Distance driven (this week)",
+        "state_attributes": {
+          "week_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_week_data": { "name": "Partial week data" },
+          "oldest_sample_timestamp": { "name": "Oldest sample time" }
+        }
       },
       "energy_consumed_rolling_7_days_factory": {
-        "name": "Energy consumed (rolling 7 days, factory capacity)"
+        "name": "Energy consumed (rolling 7 days, factory capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed in window" }
+        }
       },
       "energy_consumed_rolling_7_days_actual": {
-        "name": "Energy consumed (rolling 7 days, actual capacity)"
+        "name": "Energy consumed (rolling 7 days, actual capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed in window" }
+        }
       },
       "energy_consumed_this_week_factory": {
-        "name": "Energy consumed (this week, factory capacity)"
+        "name": "Energy consumed (this week, factory capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed this week" }
+        }
       },
       "energy_consumed_this_week_actual": {
-        "name": "Energy consumed (this week, actual capacity)"
+        "name": "Energy consumed (this week, actual capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed this week" }
+        }
       },
       "standstill_consumption_rolling_7_days_factory": {
-        "name": "Standstill consumption (rolling 7 days, factory capacity)"
+        "name": "Standstill consumption (rolling 7 days, factory capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
+        }
       },
       "standstill_consumption_rolling_7_days_actual": {
-        "name": "Standstill consumption (rolling 7 days, actual capacity)"
+        "name": "Standstill consumption (rolling 7 days, actual capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
+        }
       },
       "standstill_consumption_this_week_factory": {
-        "name": "Standstill consumption (this week, factory capacity)"
+        "name": "Standstill consumption (this week, factory capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
+        }
       },
       "standstill_consumption_this_week_actual": {
-        "name": "Standstill consumption (this week, actual capacity)"
+        "name": "Standstill consumption (this week, actual capacity)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
+        }
       },
       "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
-        "name": "Average efficiency (rolling 7 days, factory capacity, kWh/100 km)"
+        "name": "Average efficiency (rolling 7 days, factory capacity, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed in window" },
+          "distance_km": { "name": "Distance in window" }
+        }
       },
       "avg_efficiency_rolling_7_days_factory_km_per_kwh": {
-        "name": "Average efficiency (rolling 7 days, factory capacity, km/kWh)"
+        "name": "Average efficiency (rolling 7 days, factory capacity, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed in window" },
+          "distance_km": { "name": "Distance in window" }
+        }
       },
       "avg_efficiency_rolling_7_days_actual_kwh_per_100km": {
-        "name": "Average efficiency (rolling 7 days, actual capacity, kWh/100 km)"
+        "name": "Average efficiency (rolling 7 days, actual capacity, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed in window" },
+          "distance_km": { "name": "Distance in window" }
+        }
       },
       "avg_efficiency_rolling_7_days_actual_km_per_kwh": {
-        "name": "Average efficiency (rolling 7 days, actual capacity, km/kWh)"
+        "name": "Average efficiency (rolling 7 days, actual capacity, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed in window" },
+          "distance_km": { "name": "Distance in window" }
+        }
       },
       "avg_efficiency_this_week_factory_kwh_per_100km": {
-        "name": "Average efficiency (this week, factory capacity, kWh/100 km)"
+        "name": "Average efficiency (this week, factory capacity, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed this week" },
+          "distance_km": { "name": "Distance this week" }
+        }
       },
       "avg_efficiency_this_week_factory_km_per_kwh": {
-        "name": "Average efficiency (this week, factory capacity, km/kWh)"
+        "name": "Average efficiency (this week, factory capacity, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed this week" },
+          "distance_km": { "name": "Distance this week" }
+        }
       },
       "avg_efficiency_this_week_actual_kwh_per_100km": {
-        "name": "Average efficiency (this week, actual capacity, kWh/100 km)"
+        "name": "Average efficiency (this week, actual capacity, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed this week" },
+          "distance_km": { "name": "Distance this week" }
+        }
       },
       "avg_efficiency_this_week_actual_km_per_kwh": {
-        "name": "Average efficiency (this week, actual capacity, km/kWh)"
+        "name": "Average efficiency (this week, actual capacity, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" },
+          "capacity_kwh": { "name": "Capacity" },
+          "capacity_source": { "name": "Capacity source" },
+          "soc_consumed_percent": { "name": "SoC consumed this week" },
+          "distance_km": { "name": "Distance this week" }
+        }
       }
     }
   }

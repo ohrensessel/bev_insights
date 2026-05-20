@@ -74,109 +74,359 @@
   "entity": {
     "sensor": {
       "full_battery_range": {
-        "name": "Reichweite bei voller Batterie"
+        "name": "Reichweite bei voller Batterie",
+        "state_attributes": {
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "current_range_km": { "name": "Aktuelle Reichweite" },
+          "soc_source": { "name": "SoC-Quell-Entity" },
+          "range_source": { "name": "Reichweiten-Quell-Entity" }
+        }
       },
       "state_of_health": {
-        "name": "Batteriegesundheit"
+        "name": "Batteriegesundheit",
+        "state_attributes": {
+          "capacity_factory_kwh": { "name": "Werkskapazität" },
+          "capacity_actual_kwh": { "name": "Tatsächliche Kapazität" },
+          "capacity_actual_source": { "name": "Quelle der tatsächlichen Kapazität" }
+        }
       },
       "time_since_last_charge": {
-        "name": "Zeit seit letztem Laden"
+        "name": "Zeit seit letztem Laden",
+        "state_attributes": {
+          "last_charge_timestamp": { "name": "Letzter Ladevorgang beendet" }
+        }
       },
       "efficiency_factory_kwh_per_100km": {
-        "name": "Effizienz (Werkskapazität, kWh/100 km)"
+        "name": "Effizienz (Werkskapazität, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "current_range_km": { "name": "Aktuelle Reichweite" }
+        }
       },
       "efficiency_factory_km_per_kwh": {
-        "name": "Effizienz (Werkskapazität, km/kWh)"
+        "name": "Effizienz (Werkskapazität, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "current_range_km": { "name": "Aktuelle Reichweite" }
+        }
       },
       "efficiency_actual_kwh_per_100km": {
-        "name": "Effizienz (tatsächliche Kapazität, kWh/100 km)"
+        "name": "Effizienz (tatsächliche Kapazität, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "current_range_km": { "name": "Aktuelle Reichweite" }
+        }
       },
       "efficiency_actual_km_per_kwh": {
-        "name": "Effizienz (tatsächliche Kapazität, km/kWh)"
+        "name": "Effizienz (tatsächliche Kapazität, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "current_range_km": { "name": "Aktuelle Reichweite" }
+        }
       },
       "measured_full_range": {
-        "name": "Gemessene Reichweite"
+        "name": "Gemessene Reichweite",
+        "state_attributes": {
+          "baseline_mileage_km": { "name": "Kilometerstand bei Ladeende" },
+          "baseline_soc_percent": { "name": "SoC bei Ladeende" },
+          "baseline_timestamp": { "name": "Zeitpunkt des Ladeendes" },
+          "current_mileage_km": { "name": "Aktueller Kilometerstand" },
+          "current_soc_percent": { "name": "Aktueller SoC" },
+          "distance_since_last_charge_km": { "name": "Strecke seit letztem Laden" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC-Verbrauch seit letztem Laden" }
+        }
       },
       "measured_efficiency_factory_kwh_per_100km": {
-        "name": "Gemessene Effizienz (Werkskapazität, kWh/100 km)"
+        "name": "Gemessene Effizienz (Werkskapazität, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "baseline_mileage_km": { "name": "Kilometerstand bei Ladeende" },
+          "baseline_soc_percent": { "name": "SoC bei Ladeende" },
+          "baseline_timestamp": { "name": "Zeitpunkt des Ladeendes" },
+          "distance_since_last_charge_km": { "name": "Strecke seit letztem Laden" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC-Verbrauch seit letztem Laden" }
+        }
       },
       "measured_efficiency_factory_km_per_kwh": {
-        "name": "Gemessene Effizienz (Werkskapazität, km/kWh)"
+        "name": "Gemessene Effizienz (Werkskapazität, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "baseline_mileage_km": { "name": "Kilometerstand bei Ladeende" },
+          "baseline_soc_percent": { "name": "SoC bei Ladeende" },
+          "baseline_timestamp": { "name": "Zeitpunkt des Ladeendes" },
+          "distance_since_last_charge_km": { "name": "Strecke seit letztem Laden" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC-Verbrauch seit letztem Laden" }
+        }
       },
       "measured_efficiency_actual_kwh_per_100km": {
-        "name": "Gemessene Effizienz (tatsächliche Kapazität, kWh/100 km)"
+        "name": "Gemessene Effizienz (tatsächliche Kapazität, kWh/100 km)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "baseline_mileage_km": { "name": "Kilometerstand bei Ladeende" },
+          "baseline_soc_percent": { "name": "SoC bei Ladeende" },
+          "baseline_timestamp": { "name": "Zeitpunkt des Ladeendes" },
+          "distance_since_last_charge_km": { "name": "Strecke seit letztem Laden" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC-Verbrauch seit letztem Laden" }
+        }
       },
       "measured_efficiency_actual_km_per_kwh": {
-        "name": "Gemessene Effizienz (tatsächliche Kapazität, km/kWh)"
+        "name": "Gemessene Effizienz (tatsächliche Kapazität, km/kWh)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "baseline_mileage_km": { "name": "Kilometerstand bei Ladeende" },
+          "baseline_soc_percent": { "name": "SoC bei Ladeende" },
+          "baseline_timestamp": { "name": "Zeitpunkt des Ladeendes" },
+          "distance_since_last_charge_km": { "name": "Strecke seit letztem Laden" },
+          "soc_consumed_since_last_charge_percent": { "name": "SoC-Verbrauch seit letztem Laden" }
+        }
       },
       "last_charged": {
-        "name": "Zuletzt geladen"
+        "name": "Zuletzt geladen",
+        "state_attributes": {
+          "mileage_km": { "name": "Kilometerstand bei Ladeende" },
+          "soc_percent": { "name": "SoC bei Ladeende" }
+        }
       },
       "last_charge_added_factory": {
-        "name": "Letzter Ladevorgang (Werkskapazität)"
+        "name": "Letzter Ladevorgang (Werkskapazität)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "start_soc_percent": { "name": "SoC zu Sitzungsbeginn" },
+          "end_soc_percent": { "name": "SoC am Sitzungsende" },
+          "start_timestamp": { "name": "Sitzungsbeginn" },
+          "end_timestamp": { "name": "Sitzungsende" }
+        }
       },
       "last_charge_added_actual": {
-        "name": "Letzter Ladevorgang (tatsächliche Kapazität)"
+        "name": "Letzter Ladevorgang (tatsächliche Kapazität)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "start_soc_percent": { "name": "SoC zu Sitzungsbeginn" },
+          "end_soc_percent": { "name": "SoC am Sitzungsende" },
+          "start_timestamp": { "name": "Sitzungsbeginn" },
+          "end_timestamp": { "name": "Sitzungsende" }
+        }
       },
       "avg_charging_power_factory": {
-        "name": "Durchschnittliche Ladeleistung (Werkskapazität)"
+        "name": "Durchschnittliche Ladeleistung (Werkskapazität)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "start_soc_percent": { "name": "SoC zu Sitzungsbeginn" },
+          "end_soc_percent": { "name": "SoC am Sitzungsende" },
+          "start_timestamp": { "name": "Sitzungsbeginn" },
+          "end_timestamp": { "name": "Sitzungsende" },
+          "duration_hours": { "name": "Sitzungsdauer (h)" }
+        }
       },
       "avg_charging_power_actual": {
-        "name": "Durchschnittliche Ladeleistung (tatsächliche Kapazität)"
+        "name": "Durchschnittliche Ladeleistung (tatsächliche Kapazität)",
+        "state_attributes": {
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "start_soc_percent": { "name": "SoC zu Sitzungsbeginn" },
+          "end_soc_percent": { "name": "SoC am Sitzungsende" },
+          "start_timestamp": { "name": "Sitzungsbeginn" },
+          "end_timestamp": { "name": "Sitzungsende" },
+          "duration_hours": { "name": "Sitzungsdauer (h)" }
+        }
       },
       "distance_rolling_7_days": {
-        "name": "Gefahrene Strecke (gleitende 7 Tage)"
+        "name": "Gefahrene Strecke (gleitende 7 Tage)",
+        "state_attributes": {
+          "oldest_sample_timestamp": { "name": "Ältester Messzeitpunkt" },
+          "oldest_sample_mileage_km": { "name": "Ältester Kilometerstand" }
+        }
       },
       "distance_this_week": {
-        "name": "Gefahrene Strecke (diese Woche)"
+        "name": "Gefahrene Strecke (diese Woche)",
+        "state_attributes": {
+          "week_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_week_data": { "name": "Teildaten der Woche" },
+          "oldest_sample_timestamp": { "name": "Ältester Messzeitpunkt" }
+        }
       },
       "energy_consumed_rolling_7_days_factory": {
-        "name": "Energieverbrauch (gleitende 7 Tage, Werkskapazität)"
+        "name": "Energieverbrauch (gleitende 7 Tage, Werkskapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch im Fenster" }
+        }
       },
       "energy_consumed_rolling_7_days_actual": {
-        "name": "Energieverbrauch (gleitende 7 Tage, tatsächliche Kapazität)"
+        "name": "Energieverbrauch (gleitende 7 Tage, tatsächliche Kapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch im Fenster" }
+        }
       },
       "energy_consumed_this_week_factory": {
-        "name": "Energieverbrauch (diese Woche, Werkskapazität)"
+        "name": "Energieverbrauch (diese Woche, Werkskapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" }
+        }
       },
       "energy_consumed_this_week_actual": {
-        "name": "Energieverbrauch (diese Woche, tatsächliche Kapazität)"
+        "name": "Energieverbrauch (diese Woche, tatsächliche Kapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" }
+        }
       },
       "standstill_consumption_rolling_7_days_factory": {
-        "name": "Ruheverbrauch (gleitende 7 Tage, Werkskapazität)"
+        "name": "Ruheverbrauch (gleitende 7 Tage, Werkskapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
+        }
       },
       "standstill_consumption_rolling_7_days_actual": {
-        "name": "Ruheverbrauch (gleitende 7 Tage, tatsächliche Kapazität)"
+        "name": "Ruheverbrauch (gleitende 7 Tage, tatsächliche Kapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
+        }
       },
       "standstill_consumption_this_week_factory": {
-        "name": "Ruheverbrauch (diese Woche, Werkskapazität)"
+        "name": "Ruheverbrauch (diese Woche, Werkskapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
+        }
       },
       "standstill_consumption_this_week_actual": {
-        "name": "Ruheverbrauch (diese Woche, tatsächliche Kapazität)"
+        "name": "Ruheverbrauch (diese Woche, tatsächliche Kapazität)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
+        }
       },
       "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
-        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, kWh/100 km)"
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch im Fenster" },
+          "distance_km": { "name": "Strecke im Fenster" }
+        }
       },
       "avg_efficiency_rolling_7_days_factory_km_per_kwh": {
-        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, km/kWh)"
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch im Fenster" },
+          "distance_km": { "name": "Strecke im Fenster" }
+        }
       },
       "avg_efficiency_rolling_7_days_actual_kwh_per_100km": {
-        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, tatsächliche Kapazität, kWh/100 km)"
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, tatsächliche Kapazität, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch im Fenster" },
+          "distance_km": { "name": "Strecke im Fenster" }
+        }
       },
       "avg_efficiency_rolling_7_days_actual_km_per_kwh": {
-        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, tatsächliche Kapazität, km/kWh)"
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, tatsächliche Kapazität, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch im Fenster" },
+          "distance_km": { "name": "Strecke im Fenster" }
+        }
       },
       "avg_efficiency_this_week_factory_kwh_per_100km": {
-        "name": "Durchschnittliche Effizienz (diese Woche, Werkskapazität, kWh/100 km)"
+        "name": "Durchschnittliche Effizienz (diese Woche, Werkskapazität, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
+          "distance_km": { "name": "Strecke diese Woche" }
+        }
       },
       "avg_efficiency_this_week_factory_km_per_kwh": {
-        "name": "Durchschnittliche Effizienz (diese Woche, Werkskapazität, km/kWh)"
+        "name": "Durchschnittliche Effizienz (diese Woche, Werkskapazität, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
+          "distance_km": { "name": "Strecke diese Woche" }
+        }
       },
       "avg_efficiency_this_week_actual_kwh_per_100km": {
-        "name": "Durchschnittliche Effizienz (diese Woche, tatsächliche Kapazität, kWh/100 km)"
+        "name": "Durchschnittliche Effizienz (diese Woche, tatsächliche Kapazität, kWh/100 km)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
+          "distance_km": { "name": "Strecke diese Woche" }
+        }
       },
       "avg_efficiency_this_week_actual_km_per_kwh": {
-        "name": "Durchschnittliche Effizienz (diese Woche, tatsächliche Kapazität, km/kWh)"
+        "name": "Durchschnittliche Effizienz (diese Woche, tatsächliche Kapazität, km/kWh)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
+          "distance_km": { "name": "Strecke diese Woche" }
+        }
       }
     }
   }
