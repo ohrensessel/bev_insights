@@ -1,0 +1,181 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BEV Insights",
+        "description": "Wählen Sie die Quell-Sensoren und Batteriekapazitäten für die abgeleiteten Einblicke. Ladezustand- und Kilometerstands-Sensor sind optional; ohne diese werden die Sensoren für gemessene Reichweite und Ruheverbrauch nicht angelegt.",
+        "data": {
+          "name": "Name",
+          "soc_sensor": "Batterieladung (SoC) Sensor",
+          "range_sensor": "Verbleibende elektrische Reichweite Sensor",
+          "charging_sensor": "Ladezustand-Sensor (optional)",
+          "mileage_sensor": "Kilometerstand-Sensor (optional)",
+          "capacity_factory_kwh": "Werksneue Batteriekapazität (kWh)",
+          "capacity_actual_entity": "Aktuelle Batteriekapazität (Entity)"
+        },
+        "data_description": {
+          "charging_sensor": "Erkennt, wann ein Ladevorgang abgeschlossen ist. Kann ein sensor oder ein binary_sensor sein.",
+          "mileage_sensor": "Tachometerstand des Fahrzeugs zur Messung der Fahrleistung seit dem letzten Ladevorgang.",
+          "capacity_factory_kwh": "Nominale Kapazität einer neuen Batterie (z. B. 77 kWh für einen Enyaq 85).",
+          "capacity_actual_entity": "Ein input_number-Helfer oder Sensor, der die aktuelle reale Kapazität der Batterie in kWh anzeigt. Änderungen am Hilfsobjekt aktualisieren alle Sensoren für die tatsächliche Kapazität ohne Neuladen der Integration."
+        }
+      },
+      "reconfigure": {
+        "title": "BEV Insights",
+        "description": "Sensoren, Ladetracker-Eingaben und Kapazitätswerte für die Berechnungen aktualisieren.",
+        "data": {
+          "name": "Name",
+          "soc_sensor": "Batterieladung (SoC) Sensor",
+          "range_sensor": "Verbleibende elektrische Reichweite Sensor",
+          "charging_sensor": "Ladezustand-Sensor (optional)",
+          "mileage_sensor": "Kilometerstand-Sensor (optional)",
+          "capacity_factory_kwh": "Werksneue Batteriekapazität (kWh)",
+          "capacity_actual_entity": "Aktuelle Batteriekapazität (Entity)"
+        },
+        "data_description": {
+          "charging_sensor": "Erkennt, wann ein Ladevorgang abgeschlossen ist. Kann ein sensor oder ein binary_sensor sein.",
+          "mileage_sensor": "Tachometerstand des Fahrzeugs zur Messung der Fahrleistung seit dem letzten Ladevorgang.",
+          "capacity_factory_kwh": "Nominale Kapazität einer neuen Batterie (z. B. 77 kWh für einen Enyaq 85).",
+          "capacity_actual_entity": "Ein input_number-Helfer oder Sensor, der die aktuelle reale Kapazität der Batterie in kWh anzeigt. Änderungen am Hilfsobjekt aktualisieren alle Sensoren für die tatsächliche Kapazität ohne Neuladen der Integration."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Diese Sensoren sind bereits konfiguriert.",
+      "reconfigure_successful": "Neukonfiguration erfolgreich."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BEV Insights Optionen",
+        "description": "Stellen Sie ein, wie streng die Messsensoren Rauschen filtern und wie weit die gleitenden Fenstermessungen zurückschauen. Die Standardwerte sind für die meisten Fahrzeuge geeignet.",
+        "data": {
+          "min_measured_range_km": "Mindestfahrtstrecke nach dem Laden (km)",
+          "min_measured_range_soc_percent": "Minimaler SoC-Verbrauch nach dem Laden (%)",
+          "history_days": "Verlauf-Aufbewahrungsfenster (Tage)"
+        },
+        "data_description": {
+          "min_measured_range_km": "Gemessene Reichweite und Effizienz bleiben nicht verfügbar, bis mindestens diese Strecke seit dem letzten Ladeende gefahren wurde. Standard: 20 km.",
+          "min_measured_range_soc_percent": "Und bis mindestens dieser SoC-Anteil verbraucht wurde. Standard: 2 %. Beide Schwellwerte gelten; die SoC-Quantisierung (~1 % bei den meisten BEVs) dominiert den Messfehler darunter.",
+          "history_days": "Wie viele Tage SoC- und Tachometerstand-Aufzeichnungen für die gleitenden Fenstermessungen aufbewahrt werden. Standard: 8. Werte unter 7 führen dazu, dass die 7-Tage-Sensoren dauerhaft im Teildaten-Modus bleiben."
+        }
+      }
+    }
+  },
+  "issues": {
+    "v1_capacity_migration": {
+      "title": "BEV Insights: Neukonfiguration erforderlich für \"{title}\"",
+      "description": "Ihre BEV Insights-Konfiguration verwendet das Format der tatsächlichen Kapazität vor v0.7 (war ein fester Wert; jetzt ein Entity-Verweis). Der bisherige Wert war **{old_kwh} kWh** — erstellen Sie einen `input_number`-Helfer mit diesem Wert unter **Einstellungen → Geräte & Dienste → Helfer** und öffnen Sie dann die BEV Insights Integrationskarte und klicken Sie auf **Konfigurieren**, um den neuen Helfer auszuwählen. Dieser Reparatureintrag wird nach erfolgreichem Einrichten automatisch entfernt."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "full_battery_range": {
+        "name": "Reichweite bei voller Batterie"
+      },
+      "state_of_health": {
+        "name": "Batteriegesundheit"
+      },
+      "time_since_last_charge": {
+        "name": "Zeit seit letztem Laden"
+      },
+      "efficiency_factory_kwh_per_100km": {
+        "name": "Effizienz (Werkskapazität, kWh/100 km)"
+      },
+      "efficiency_factory_km_per_kwh": {
+        "name": "Effizienz (Werkskapazität, km/kWh)"
+      },
+      "efficiency_actual_kwh_per_100km": {
+        "name": "Effizienz (tatsächliche Kapazität, kWh/100 km)"
+      },
+      "efficiency_actual_km_per_kwh": {
+        "name": "Effizienz (tatsächliche Kapazität, km/kWh)"
+      },
+      "measured_full_range": {
+        "name": "Gemessene Reichweite"
+      },
+      "measured_efficiency_factory_kwh_per_100km": {
+        "name": "Gemessene Effizienz (Werkskapazität, kWh/100 km)"
+      },
+      "measured_efficiency_factory_km_per_kwh": {
+        "name": "Gemessene Effizienz (Werkskapazität, km/kWh)"
+      },
+      "measured_efficiency_actual_kwh_per_100km": {
+        "name": "Gemessene Effizienz (tatsächliche Kapazität, kWh/100 km)"
+      },
+      "measured_efficiency_actual_km_per_kwh": {
+        "name": "Gemessene Effizienz (tatsächliche Kapazität, km/kWh)"
+      },
+      "last_charged": {
+        "name": "Zuletzt geladen"
+      },
+      "last_charge_added_factory": {
+        "name": "Letzter Ladevorgang (Werkskapazität)"
+      },
+      "last_charge_added_actual": {
+        "name": "Letzter Ladevorgang (tatsächliche Kapazität)"
+      },
+      "avg_charging_power_factory": {
+        "name": "Durchschnittliche Ladeleistung (Werkskapazität)"
+      },
+      "avg_charging_power_actual": {
+        "name": "Durchschnittliche Ladeleistung (tatsächliche Kapazität)"
+      },
+      "distance_rolling_7_days": {
+        "name": "Gefahrene Strecke (gleitende 7 Tage)"
+      },
+      "distance_this_week": {
+        "name": "Gefahrene Strecke (diese Woche)"
+      },
+      "energy_consumed_rolling_7_days_factory": {
+        "name": "Energieverbrauch (gleitende 7 Tage, Werkskapazität)"
+      },
+      "energy_consumed_rolling_7_days_actual": {
+        "name": "Energieverbrauch (gleitende 7 Tage, tatsächliche Kapazität)"
+      },
+      "energy_consumed_this_week_factory": {
+        "name": "Energieverbrauch (diese Woche, Werkskapazität)"
+      },
+      "energy_consumed_this_week_actual": {
+        "name": "Energieverbrauch (diese Woche, tatsächliche Kapazität)"
+      },
+      "standstill_consumption_rolling_7_days_factory": {
+        "name": "Ruheverbrauch (gleitende 7 Tage, Werkskapazität)"
+      },
+      "standstill_consumption_rolling_7_days_actual": {
+        "name": "Ruheverbrauch (gleitende 7 Tage, tatsächliche Kapazität)"
+      },
+      "standstill_consumption_this_week_factory": {
+        "name": "Ruheverbrauch (diese Woche, Werkskapazität)"
+      },
+      "standstill_consumption_this_week_actual": {
+        "name": "Ruheverbrauch (diese Woche, tatsächliche Kapazität)"
+      },
+      "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, kWh/100 km)"
+      },
+      "avg_efficiency_rolling_7_days_factory_km_per_kwh": {
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, km/kWh)"
+      },
+      "avg_efficiency_rolling_7_days_actual_kwh_per_100km": {
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, tatsächliche Kapazität, kWh/100 km)"
+      },
+      "avg_efficiency_rolling_7_days_actual_km_per_kwh": {
+        "name": "Durchschnittliche Effizienz (gleitende 7 Tage, tatsächliche Kapazität, km/kWh)"
+      },
+      "avg_efficiency_this_week_factory_kwh_per_100km": {
+        "name": "Durchschnittliche Effizienz (diese Woche, Werkskapazität, kWh/100 km)"
+      },
+      "avg_efficiency_this_week_factory_km_per_kwh": {
+        "name": "Durchschnittliche Effizienz (diese Woche, Werkskapazität, km/kWh)"
+      },
+      "avg_efficiency_this_week_actual_kwh_per_100km": {
+        "name": "Durchschnittliche Effizienz (diese Woche, tatsächliche Kapazität, kWh/100 km)"
+      },
+      "avg_efficiency_this_week_actual_km_per_kwh": {
+        "name": "Durchschnittliche Effizienz (diese Woche, tatsächliche Kapazität, km/kWh)"
+      }
+    }
+  }
+}
