@@ -140,6 +140,18 @@
       "energy_consumed_this_week_actual": {
         "name": "Energy consumed (this week, actual capacity)"
       },
+      "standstill_consumption_rolling_7_days_factory": {
+        "name": "Standstill consumption (rolling 7 days, factory capacity)"
+      },
+      "standstill_consumption_rolling_7_days_actual": {
+        "name": "Standstill consumption (rolling 7 days, actual capacity)"
+      },
+      "standstill_consumption_this_week_factory": {
+        "name": "Standstill consumption (this week, factory capacity)"
+      },
+      "standstill_consumption_this_week_actual": {
+        "name": "Standstill consumption (this week, actual capacity)"
+      },
       "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
         "name": "Average efficiency (rolling 7 days, factory capacity, kWh/100 km)"
       },

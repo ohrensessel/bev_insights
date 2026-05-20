@@ -53,10 +53,14 @@ EXPECTED_SUFFIXES = {
     "_avg_efficiency_this_week_factory_km_per_kwh",
     "_avg_efficiency_this_week_actual_kwh_per_100km",
     "_avg_efficiency_this_week_actual_km_per_kwh",
+    "_standstill_consumption_rolling_7_days_factory",
+    "_standstill_consumption_rolling_7_days_actual",
+    "_standstill_consumption_this_week_factory",
+    "_standstill_consumption_this_week_actual",
 }
 
 
-async def test_full_entry_creates_all_31_entities(hass: HomeAssistant) -> None:
+async def test_full_entry_creates_all_35_entities(hass: HomeAssistant) -> None:
     hass.states.async_set(SOC_ENTITY, "50")
     hass.states.async_set(RANGE_ENTITY, "200")
     hass.states.async_set(MILEAGE_ENTITY, "10000")
@@ -75,4 +79,4 @@ async def test_full_entry_creates_all_31_entities(hass: HomeAssistant) -> None:
         if e.config_entry_id == entry.entry_id
     }
     assert suffixes == EXPECTED_SUFFIXES
-    assert len(suffixes) == 31
+    assert len(suffixes) == 35

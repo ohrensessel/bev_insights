@@ -4,6 +4,25 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0]
+
+### Added
+- **Standstill consumption sensors (vampire drain):** 4 new sensors
+  (2 windows × 2 capacity variants) that report kWh consumed while the
+  car was parked. For each downward SoC step in the window, the sensor
+  cross-references the odometer: steps where mileage didn't advance are
+  attributed to standstill drain; steps with movement are excluded as
+  driving consumption. Requires both the mileage and SoC sensors to be
+  configured. The `this_week` variant is `state_class=TOTAL`; the
+  rolling-7-day variant omits a state class (sliding windows can't be
+  accumulators).
+- **German translations (`de.json`):** full translation of all config-flow
+  labels, options, issues, and entity names.
+- **Energy Dashboard step-by-step guide** in README.
+
+### Changed
+- Total sensor count per fully-wired config entry: **31 → 35**.
+
 ## [1.0.0]
 
 ### Changed

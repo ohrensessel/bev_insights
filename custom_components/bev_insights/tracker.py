@@ -382,6 +382,16 @@ class EntityHistory:
         """Return True if at least one sample predates the window cutoff."""
         return bool(self._samples) and self._samples[0][0] <= cutoff
 
+    def value_at(self, ts: datetime) -> float | None:
+        """Return the most recent sample value at or before `ts`, or None."""
+        result: float | None = None
+        for sample_ts, value in self._samples:
+            if sample_ts <= ts:
+                result = value
+            else:
+                break
+        return result
+
     # Internals --------------------------------------------------------- #
 
     @callback
@@ -512,4 +522,41 @@ class SocHistory(EntityHistory):
             if value < previous_value:
                 consumed += previous_value - value
             previous_value = value
+        return consumed
+
+    def standstill_consumed_since(
+        self, cutoff: datetime, mileage: MileageHistory
+    ) -> float | None:
+        """Return SoC% consumed while the car was parked since `cutoff`, or None.
+
+        Walks SoC sample intervals chronologically. An interval is counted as
+        standstill if the odometer shows no movement (< 0.1 km) in that period.
+        Upward SoC steps (charging) are always skipped. Returns None when there
+        is no SoC or mileage data to work with.
+        """
+        if not self._samples or not mileage.has_data:
+            return None
+        anchor_index: int | None = None
+        for i, (ts, _) in enumerate(self._samples):
+            if ts <= cutoff:
+                anchor_index = i
+            else:
+                break
+        if anchor_index is None:
+            anchor_index = 0
+        consumed = 0.0
+        soc_samples = list(self._samples)[anchor_index:]
+        for i in range(len(soc_samples) - 1):
+            t_start, soc_start = soc_samples[i]
+            t_end, soc_end = soc_samples[i + 1]
+            soc_drop = soc_start - soc_end
+            if soc_drop <= 0:
+                continue
+            mileage_start = mileage.value_at(t_start)
+            mileage_end = mileage.value_at(t_end)
+            if mileage_start is None or mileage_end is None:
+                continue
+            if mileage_end - mileage_start >= 0.1:
+                continue
+            consumed += soc_drop
         return consumed

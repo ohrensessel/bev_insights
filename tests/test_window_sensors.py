@@ -445,6 +445,145 @@ async def test_avg_efficiency_window_fresh_install_uses_oldest_as_anchor(
     assert state.attributes["partial_window_data"] is True
 
 
+# --------------------------------------------------------------------------- #
+# StandstillConsumptionWindowSensor                                           #
+# --------------------------------------------------------------------------- #
+
+
+async def test_standstill_consumption_pure_parked(hass: HomeAssistant) -> None:
+    """SoC drops 10% while mileage is flat → full drop counted as standstill."""
+    entry = await _setup_full(hass)
+    soc_history, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(days=8), 80.0),  # anchor
+            (now - timedelta(days=3), 80.0),
+            (now - timedelta(days=1), 70.0),  # -10% while parked
+        ]
+    )
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [
+            (now - timedelta(days=8), 10000.0),
+            (now - timedelta(days=1), 10000.0),  # no movement
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    # factory: 77 × 10 / 100 = 7.7 kWh; actual: 70 × 10 / 100 = 7.0 kWh
+    state = _find_state(hass, "_standstill_consumption_rolling_7_days_factory")
+    assert float(state.state) == pytest.approx(7.7)
+    state = _find_state(hass, "_standstill_consumption_rolling_7_days_actual")
+    assert float(state.state) == pytest.approx(7.0)
+
+
+async def test_standstill_consumption_pure_driving(hass: HomeAssistant) -> None:
+    """SoC drops 20% while mileage advances → nothing counted as standstill."""
+    entry = await _setup_full(hass)
+    soc_history, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(days=8), 80.0),
+            (now - timedelta(days=1), 60.0),  # -20% while driving
+        ]
+    )
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [
+            (now - timedelta(days=8), 10000.0),
+            (now - timedelta(days=1), 10150.0),  # +150 km
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    state = _find_state(hass, "_standstill_consumption_rolling_7_days_factory")
+    assert float(state.state) == pytest.approx(0.0)
+
+
+async def test_standstill_consumption_mixed(hass: HomeAssistant) -> None:
+    """Two intervals: one parked (5% SoC), one driving (15% SoC).
+    Only the parked interval contributes to standstill."""
+    entry = await _setup_full(hass)
+    soc_history, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(days=8), 90.0),  # anchor
+            (now - timedelta(days=4), 85.0),  # -5% parked
+            (now - timedelta(days=2), 70.0),  # -15% driving
+        ]
+    )
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [
+            (now - timedelta(days=8), 10000.0),
+            (now - timedelta(days=4), 10000.0),  # parked
+            (now - timedelta(days=2), 10100.0),  # drove 100 km
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    # only 5% standstill; factory: 77 × 5 / 100 = 3.85 kWh
+    state = _find_state(hass, "_standstill_consumption_rolling_7_days_factory")
+    assert float(state.state) == pytest.approx(3.85)
+
+
+async def test_standstill_consumption_unavailable_without_mileage(
+    hass: HomeAssistant,
+) -> None:
+    """No mileage samples → can't classify intervals → unavailable."""
+    entry = await _setup_full(hass)
+    soc_history, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [(now - timedelta(days=8), 80.0), (now - timedelta(days=1), 70.0)]
+    )
+    mileage_history._samples.clear()
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    state = _find_state(hass, "_standstill_consumption_rolling_7_days_factory")
+    assert state.state in ("unavailable", "unknown")
+
+
+async def test_standstill_consumption_this_week_is_total(
+    hass: HomeAssistant,
+) -> None:
+    """`this_week` variant declares state_class=TOTAL with last_reset at Monday."""
+    entry = await _setup_full(hass)
+    soc_history, mileage_history = _histories(hass, entry)
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [(now - timedelta(days=8), 80.0), (now - timedelta(hours=1), 78.0)]
+    )
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [(now - timedelta(days=8), 10000.0), (now - timedelta(hours=1), 10000.0)]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    state = _find_state(hass, "_standstill_consumption_this_week_factory")
+    assert state.attributes["state_class"] == "total"
+    assert "last_reset" in state.attributes
+    assert state.attributes["last_reset"] == state.attributes["window_start"]
+
+
 async def test_avg_efficiency_window_actual_capacity_variant_uses_actual(
     hass: HomeAssistant,
 ) -> None:

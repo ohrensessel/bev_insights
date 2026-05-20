@@ -217,6 +217,25 @@ async def async_setup_entry(
                     )
                 )
 
+    # Standstill (vampire drain) window sensors — needs both histories.
+    if soc_history is not None and mileage_history is not None:
+        for window_key, window_label in WINDOWS:
+            for capacity, capacity_variant in (
+                (capacity_factory, VARIANT_FACTORY),
+                (capacity_actual, VARIANT_ACTUAL),
+            ):
+                entities.append(
+                    StandstillConsumptionWindowSensor(
+                        entry,
+                        soc_history,
+                        mileage_history,
+                        capacity=capacity,
+                        capacity_variant=capacity_variant,
+                        window_key=window_key,
+                        window_label=window_label,
+                    )
+                )
+
     # Weekly average efficiency — needs both histories together.
     if soc_history is not None and mileage_history is not None:
         for window_key, window_label in WINDOWS:
@@ -1527,6 +1546,99 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
             "capacity_kwh": self._capacity.current(),
             "capacity_source": self._capacity.describe(),
             "soc_consumed_percent": (
+                round(consumed_pct, 2) if consumed_pct is not None else None
+            ),
+        }
+
+
+class StandstillConsumptionWindowSensor(_WindowedSensor):
+    """kWh consumed while the car was parked (vampire / standby drain) over a window.
+
+    For each downward SoC step in the window, checks the odometer over that
+    interval. Steps where mileage did not move (< 0.1 km) are attributed to
+    standstill drain. Steps that coincide with driving are attributed to driving
+    and excluded. The result is the kWh bled away by the car's electronics while
+    sitting parked.
+
+    State class follows the same pattern as `EnergyConsumedWindowSensor`:
+    `TOTAL` for the calendar-week variant (resets Monday 00:00), unset for
+    the rolling-7-day variant (sliding windows can't be accumulators).
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:sleep"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_history: SocHistory,
+        mileage_history: MileageHistory,
+        capacity: CapacitySource,
+        capacity_variant: str,
+        window_key: str,
+        window_label: str,
+    ) -> None:
+        super().__init__(
+            entry,
+            window_key,
+            window_label,
+            listen_soc_history=True,
+            listen_mileage_history=True,
+            capacity_entity=capacity.source_entity,
+        )
+        self._soc_history = soc_history
+        self._mileage_history = mileage_history
+        self._capacity = capacity
+        self._capacity_variant = capacity_variant
+        if window_key == "this_week":
+            self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_unique_id = (
+            f"{entry.entry_id}_standstill_consumption_"
+            f"{window_key}_{capacity_variant}"
+        )
+        self._attr_translation_key = (
+            f"standstill_consumption_{window_key}_{capacity_variant}"
+        )
+        self._attr_name = (
+            f"Standstill consumption ({window_label.lower()}, "
+            f"{capacity_variant} capacity)"
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        if self._window_key == "this_week":
+            self._attr_last_reset = cutoff
+        consumed_pct = self._soc_history.standstill_consumed_since(
+            cutoff, self._mileage_history
+        )
+        capacity_kwh = self._capacity.current()
+        if consumed_pct is None or capacity_kwh is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        self._attr_available = True
+        self._attr_native_value = round(capacity_kwh * consumed_pct / 100.0, 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        consumed_pct = self._soc_history.standstill_consumed_since(
+            cutoff, self._mileage_history
+        )
+        return {
+            "window": self._window_key,
+            "window_start": cutoff.isoformat(),
+            "partial_window_data": (
+                not self._soc_history.has_pre_window_sample(cutoff)
+                or not self._mileage_history.has_pre_window_sample(cutoff)
+            ),
+            "capacity_variant": self._capacity_variant,
+            "capacity_kwh": self._capacity.current(),
+            "capacity_source": self._capacity.describe(),
+            "soc_consumed_standstill_percent": (
                 round(consumed_pct, 2) if consumed_pct is not None else None
             ),
         }
