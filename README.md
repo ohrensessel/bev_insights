@@ -4,7 +4,7 @@
 
 # BEV Insights
 
-A Home Assistant custom integration that derives **up to 31 additional sensors** for a
+A Home Assistant custom integration that derives **up to 35 additional sensors** for a
 battery-electric vehicle from a small set of source entities: battery percentage (SoC),
 remaining range, an optional charging-state indicator, and an optional odometer reading.
 
@@ -65,9 +65,19 @@ Two windows: **rolling 7 days** (trailing 168 h) and **this calendar week** (loc
 | Average efficiency (this week, factory capacity, km/kWh) | km/kWh |
 | Average efficiency (this week, actual capacity, kWh/100 km) | kWh/100 km |
 | Average efficiency (this week, actual capacity, km/kWh) | km/kWh |
+| Standstill consumption (rolling 7 days, factory capacity) | kWh |
+| Standstill consumption (rolling 7 days, actual capacity) | kWh |
+| Standstill consumption (this week, factory capacity) | kWh |
+| Standstill consumption (this week, actual capacity) | kWh |
 
 Energy-consumed sensors sum only **downward** SoC steps in the window, so charging events
 inside the window don't inflate the figure — the number reflects driving consumption only.
+
+Standstill-consumption sensors split that driving figure further: for each SoC drop in the
+window they check whether the odometer advanced. Intervals where the car didn't move are
+counted as parked vampire drain; intervals with movement are attributed to driving and
+excluded. The sum of driving consumption and standstill consumption equals total energy
+consumed in the window.
 
 On a fresh install the window sensors fall back to the oldest available sample as the
 window anchor and expose `partial_window_data: true` in their attributes until enough
@@ -100,6 +110,38 @@ history has accumulated.
 | Live actual battery capacity entity | Yes | An `input_number` helper or sensor in kWh. Change its value to update all actual-capacity sensors live without reloading the integration. |
 | Charging-state sensor (optional) | No | Enables charge-tracker sensors. May be a `sensor` or `binary_sensor`. |
 | Mileage / odometer sensor (optional) | No | Enables charge-tracker and window sensors. |
+
+### Home Assistant Energy Dashboard
+
+Two of the integration's sensors are shaped to drop straight into HA's
+**Energy Dashboard** as individual-device consumption sources:
+
+| Use as | Sensor |
+|---|---|
+| **Energy delivered to the car** per charging session | `sensor.<title>_last_charge_added_actual_capacity` |
+| **Energy spent driving** week-by-week | `sensor.<title>_energy_consumed_this_week_actual_capacity` |
+
+**Step-by-step setup:**
+
+1. Go to **Settings → Dashboards → Energy**.
+2. Under *Individual devices*, click **Add device**.
+3. In the entity picker, search for your entry title (e.g. `Enyaq`).
+4. Select `Last charge added (actual capacity)` for per-session charging energy, **or**
+   select `Energy consumed (this week, actual capacity)` for weekly driving consumption.
+5. Click **Save** and wait for Long-Term Statistics to accumulate the first data point.
+
+Both sensors declare `device_class=ENERGY` + `state_class=TOTAL` with `last_reset`
+advanced on each session end (for last-charge-added) or each Monday 00:00
+(for this-week consumption), so HA's Long-Term Statistics correctly
+accumulates them rather than treating the reset-to-zero as data corruption.
+
+The *actual* capacity variants are usually the better choice for an aging battery; switch
+to the *factory* variants if you trust the nameplate number more.
+
+The rolling-7-day variants deliberately omit a state class because a sliding window isn't
+an accumulator — they show up in dashboards as regular numeric sensors but won't feed the
+Energy Dashboard's running totals. The standstill-consumption sensors follow the same
+convention and are not suitable for the Energy Dashboard either.
 
 ### Tuning the integration
 
