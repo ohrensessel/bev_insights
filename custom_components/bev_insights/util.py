@@ -15,6 +15,9 @@ INVALID_STATES: frozenset[str | None] = frozenset(
 
 # Conversion factors to kilometres for any distance unit we might see.
 # HA may have converted km → mi for imperial users before we read state.state.
+# Named with a leading underscore because it's an implementation detail, but
+# exported for the backfill path (and tracker tests) that need unit conversion
+# from historical State objects without going through hass.states.
 _DISTANCE_TO_KM: dict[str, float] = {
     "km": 1.0,
     UnitOfLength.KILOMETERS: 1.0,

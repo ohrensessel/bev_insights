@@ -20,7 +20,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -54,7 +54,13 @@ from .const import (
     signal_mileage_history_updated,
     signal_soc_history_updated,
 )
-from .util import is_charging, read_distance_km, read_float
+from .util import (
+    INVALID_STATES,
+    _DISTANCE_TO_KM,
+    is_charging,
+    read_distance_km,
+    read_float,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -400,6 +406,39 @@ class EntityHistory:
         """Return True if at least one sample predates the window cutoff."""
         return bool(self._samples) and self._samples[0][0] <= cutoff
 
+    async def async_backfill(self, states: list[State]) -> None:
+        """Insert historical State objects into the deque on first install.
+
+        Only runs when the deque is currently empty — a no-op otherwise so
+        re-loading the integration never overwrites real data. Non-numeric and
+        out-of-max-age entries are skipped. Consecutive duplicates are dropped
+        by the same rule as live recording.
+        """
+        if self._samples:
+            return
+        now = dt_util.utcnow()
+        for state in states:
+            if state.state in INVALID_STATES:
+                continue
+            if now - state.last_updated > self._max_age:
+                continue
+            value = self._backfill_parse(state)
+            if value is None:
+                continue
+            if self._samples and self._samples[-1][1] == value:
+                continue
+            self._samples.append((state.last_updated, value))
+        if self._samples:
+            self._prune(now)
+            await self._persist()
+
+    def _backfill_parse(self, state: State) -> float | None:
+        """Parse a historical State for backfill. Override in subclasses."""
+        try:
+            return float(state.state)
+        except (TypeError, ValueError):
+            return None
+
     def value_at(self, ts: datetime) -> float | None:
         """Return the most recent sample value at or before `ts`, or None."""
         result: float | None = None
@@ -481,6 +520,14 @@ class MileageHistory(EntityHistory):
     def _postprocess_delta(self, raw_delta: float) -> float:
         return max(0.0, raw_delta)
 
+    def _backfill_parse(self, state: State) -> float | None:
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return None
+        unit = state.attributes.get("unit_of_measurement") or "km"
+        return value * _DISTANCE_TO_KM.get(unit, 1.0)
+
 
 class SocHistory(EntityHistory):
     """Rolling window of state-of-charge samples in percent.
@@ -517,6 +564,13 @@ class SocHistory(EntityHistory):
 
     def _signal(self) -> str:
         return signal_soc_history_updated(self.entry.entry_id)
+
+    def _backfill_parse(self, state: State) -> float | None:
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return None
+        return min(max(value, 0.0), 100.0)
 
     def consumed_since(self, cutoff: datetime) -> float | None:
         """Return total SoC consumed (percent) since `cutoff`, or None.

@@ -38,6 +38,7 @@ from .const import (
     MILEAGE_HISTORY_DAYS,
     STORAGE_VERSION,
 )
+from .backfill import async_backfill_from_recorder
 from .tracker import ChargeTracker, MileageHistory, SocHistory
 
 _LOGGER = logging.getLogger(__name__)
@@ -88,15 +89,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass, entry, mileage_entity=mileage_entity, max_age_days=history_days
         )
         await mileage_history.async_load()
+        await async_backfill_from_recorder(
+            hass, mileage_history, mileage_entity, days=history_days
+        )
         mileage_history.async_start()
 
+    soc_entity = entry.data[CONF_SOC_SENSOR]
     soc_history = SocHistory(
         hass,
         entry,
-        soc_entity=entry.data[CONF_SOC_SENSOR],
+        soc_entity=soc_entity,
         max_age_days=history_days,
     )
     await soc_history.async_load()
+    await async_backfill_from_recorder(
+        hass, soc_history, soc_entity, days=history_days
+    )
     soc_history.async_start()
 
     # Build the two capacity sources up front so sensor.py doesn't need
