@@ -207,6 +207,18 @@ async def async_setup_entry(
     if soc_history is not None:
         entities.append(DaysToLowSocSensor(entry, soc_history, soc_entity))
 
+    # Charge count per window — needs SoC history only.
+    if soc_history is not None:
+        for window_key, window_label in WINDOWS:
+            entities.append(
+                ChargeCountWindowSensor(
+                    entry,
+                    soc_history,
+                    window_key=window_key,
+                    window_label=window_label,
+                )
+            )
+
     # kWh consumed per window — needs SoC history only.
     if soc_history is not None:
         for window_key, window_label in WINDOWS:
@@ -1655,6 +1667,62 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
             "soc_consumed_standstill_percent": (
                 round(consumed_pct, 2) if consumed_pct is not None else None
             ),
+        }
+
+
+class ChargeCountWindowSensor(_WindowedSensor):
+    """Number of charging sessions completed in a window.
+
+    A session is a contiguous run of upward SoC steps totalling ≥ 5 %,
+    which filters out quantization noise while catching every real charge.
+
+    No capacity variants — count is independent of battery size.
+
+    `this_week` uses `SensorStateClass.TOTAL` so LTS produces a per-week
+    charge-count curve; the rolling variant omits a state class (a sliding
+    window can decrease as old sessions roll out).
+    """
+
+    _attr_native_unit_of_measurement = "charges"
+    _attr_icon = "mdi:battery-charging-100"
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        soc_history: SocHistory,
+        window_key: str,
+        window_label: str,
+    ) -> None:
+        super().__init__(
+            entry,
+            window_key,
+            window_label,
+            listen_soc_history=True,
+            listen_mileage_history=False,
+        )
+        self._soc_history = soc_history
+        if window_key == "this_week":
+            self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_unique_id = f"{entry.entry_id}_charge_count_{window_key}"
+        self._attr_translation_key = f"charge_count_{window_key}"
+        self._attr_name = f"Charge count ({window_label.lower()})"
+
+    @callback
+    def _recalculate(self) -> None:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        if self._window_key == "this_week":
+            self._attr_last_reset = cutoff
+        self._attr_available = True
+        self._attr_native_value = self._soc_history.charge_count_since(cutoff)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
+        return {
+            "window": self._window_key,
+            "window_start": cutoff.isoformat(),
+            "partial_window_data": not self._soc_history.has_pre_window_sample(cutoff),
         }
 
 

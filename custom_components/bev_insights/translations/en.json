@@ -342,6 +342,20 @@
           "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
         }
       },
+      "charge_count_rolling_7_days": {
+        "name": "Charge count (rolling 7 days)",
+        "state_attributes": {
+          "window_start": { "name": "Window start" },
+          "partial_window_data": { "name": "Partial window data" }
+        }
+      },
+      "charge_count_this_week": {
+        "name": "Charge count (this week)",
+        "state_attributes": {
+          "window_start": { "name": "Week start (local Monday 00:00)" },
+          "partial_window_data": { "name": "Partial window data" }
+        }
+      },
       "days_to_low_soc": {
         "name": "Days to low SoC",
         "state_attributes": {

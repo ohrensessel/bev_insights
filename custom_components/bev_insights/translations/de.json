@@ -342,6 +342,20 @@
           "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
         }
       },
+      "charge_count_rolling_7_days": {
+        "name": "Ladeanzahl (gleitende 7 Tage)",
+        "state_attributes": {
+          "window_start": { "name": "Fensterbeginn" },
+          "partial_window_data": { "name": "Teildaten des Fensters" }
+        }
+      },
+      "charge_count_this_week": {
+        "name": "Ladeanzahl (diese Woche)",
+        "state_attributes": {
+          "window_start": { "name": "Wochenbeginn (Montag 00:00 Ortszeit)" },
+          "partial_window_data": { "name": "Teildaten der Woche" }
+        }
+      },
       "days_to_low_soc": {
         "name": "Tage bis niedriger SoC",
         "state_attributes": {

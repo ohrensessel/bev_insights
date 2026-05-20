@@ -525,6 +525,44 @@ class SocHistory(EntityHistory):
             previous_value = value
         return consumed
 
+    def charge_count_since(self, cutoff: datetime, min_rise_percent: float = 5.0) -> int:
+        """Count charging sessions that completed since `cutoff`.
+
+        A session is a contiguous run of upward SoC steps whose total rise
+        is at least `min_rise_percent`. The 5 % floor filters out the small
+        upward ticks caused by SoC sensor quantization noise.
+        """
+        if not self._samples:
+            return 0
+        anchor_index: int | None = None
+        for i, (ts, _) in enumerate(self._samples):
+            if ts <= cutoff:
+                anchor_index = i
+            else:
+                break
+        if anchor_index is None:
+            anchor_index = 0
+        samples = list(self._samples)[anchor_index:]
+        count = 0
+        session_rise = 0.0
+        in_charge = False
+        for i in range(len(samples) - 1):
+            _, soc_cur = samples[i]
+            _, soc_next = samples[i + 1]
+            delta = soc_next - soc_cur
+            if delta > 0:
+                session_rise += delta
+                in_charge = True
+            else:
+                if in_charge and session_rise >= min_rise_percent:
+                    count += 1
+                session_rise = 0.0
+                in_charge = False
+        # Catch an open session at the end of the window.
+        if in_charge and session_rise >= min_rise_percent:
+            count += 1
+        return count
+
     def standstill_consumed_since(
         self,
         cutoff: datetime,
