@@ -4,7 +4,7 @@
 
 # BEV Insights
 
-A Home Assistant custom integration that derives **up to 35 additional sensors** for a
+A Home Assistant custom integration that derives **up to 41 additional sensors** for a
 battery-electric vehicle from a small set of source entities: battery percentage (SoC),
 remaining range, an optional charging-state indicator, and an optional odometer reading.
 

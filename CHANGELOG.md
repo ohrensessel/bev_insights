@@ -4,6 +4,32 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0]
+
+### Added
+- **Days-to-low-SoC estimate sensor** (`days_to_low_soc`): projects how many
+  days remain until the battery reaches a configurable low-SoC threshold
+  (default 20 %, tuneable via options). Formula: `(current_soc − threshold) /
+  daily_avg_consumption` where the daily average is the rolling 7-day figure.
+  Requires only the SoC sensor (always available). New option:
+  `low_soc_threshold_percent`.
+- **Charge count window sensors** (2 sensors: rolling 7 days, this week):
+  counts distinct charging sessions observed in the SoC history. A session is
+  a contiguous upward SoC run totalling ≥ 5 %, filtering quantization noise.
+  The this-week variant carries `SensorStateClass.TOTAL` for clean LTS curves.
+- **Session log sensor** (`session_log`, diagnostic): surfaces the last 20
+  completed charging sessions from the `ChargeTracker`. State = session count,
+  attributes include a newest-first list with start/end SoC and timestamps.
+  Only created when both charging-state and mileage sensors are configured.
+  The log is persisted across HA restarts.
+- **Standstill-ratio window sensors** (2 sensors: rolling 7 days, this week):
+  reports the fraction of total battery consumption attributable to standstill
+  (vampire) drain: `standstill_consumed / total_consumed × 100 %`. Requires
+  both SoC and mileage histories.
+
+### Changed
+- Total sensor count per fully-wired config entry: **35 → 41**.
+
 ## [1.2.0]
 
 ### Added
