@@ -20,6 +20,7 @@ from .const import (
     CONF_NAME,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
+    CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
     CONFIG_ENTRY_VERSION,
     DEFAULT_CAPACITY_KWH,
     DEFAULT_NAME,
@@ -27,6 +28,7 @@ from .const import (
     MILEAGE_HISTORY_DAYS,
     MIN_MEASURED_RANGE_KM,
     MIN_MEASURED_RANGE_SOC_PERCENT,
+    STANDSTILL_MOVEMENT_THRESHOLD_KM,
 )
 
 
@@ -223,6 +225,21 @@ def _options_schema(current: dict[str, Any]) -> vol.Schema:
                     max=60,
                     step=1,
                     unit_of_measurement="days",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
+                default=current.get(
+                    CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
+                    STANDSTILL_MOVEMENT_THRESHOLD_KM,
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.0,
+                    max=5.0,
+                    step=0.1,
+                    unit_of_measurement="km",
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),

@@ -41,13 +41,18 @@ def base_entry_data(**overrides: Any) -> dict[str, Any]:
     return data
 
 
-def make_entry(version: int = CONFIG_ENTRY_VERSION, **overrides: Any) -> MockConfigEntry:
+def make_entry(
+    version: int = CONFIG_ENTRY_VERSION,
+    options: dict[str, Any] | None = None,
+    **overrides: Any,
+) -> MockConfigEntry:
     """Build a MockConfigEntry — not added to hass yet."""
     data = overrides.pop("data", None) or base_entry_data(**overrides)
     return MockConfigEntry(
         domain=DOMAIN,
         version=version,
         data=data,
+        options=options or {},
         title=data[CONF_NAME],
         unique_id=f"{data[CONF_SOC_SENSOR]}|{data[CONF_RANGE_SENSOR]}",
     )

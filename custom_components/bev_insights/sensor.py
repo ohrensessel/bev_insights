@@ -56,6 +56,7 @@ from .const import (
     CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
+    CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
     DOMAIN,
     MIN_MEASURED_RANGE_KM,
     MIN_MEASURED_RANGE_SOC_PERCENT,
@@ -63,6 +64,7 @@ from .const import (
     SESSION_END_TIMESTAMP,
     SESSION_START_SOC_PERCENT,
     SESSION_START_TIMESTAMP,
+    STANDSTILL_MOVEMENT_THRESHOLD_KM,
     UNIT_KM_PER_KWH,
     UNIT_KWH_PER_100KM,
     UNIT_VARIANT_KM_PER_KWH,
@@ -1592,6 +1594,12 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
         self._mileage_history = mileage_history
         self._capacity = capacity
         self._capacity_variant = capacity_variant
+        self._threshold_km = float(
+            entry.options.get(
+                CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
+                STANDSTILL_MOVEMENT_THRESHOLD_KM,
+            )
+        )
         if window_key == "this_week":
             self._attr_state_class = SensorStateClass.TOTAL
         self._attr_unique_id = (
@@ -1612,7 +1620,7 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
         if self._window_key == "this_week":
             self._attr_last_reset = cutoff
         consumed_pct = self._soc_history.standstill_consumed_since(
-            cutoff, self._mileage_history
+            cutoff, self._mileage_history, self._threshold_km
         )
         capacity_kwh = self._capacity.current()
         if consumed_pct is None or capacity_kwh is None:
@@ -1626,7 +1634,7 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         cutoff = _window_cutoff(self.hass, self._window_key, dt_util.utcnow())
         consumed_pct = self._soc_history.standstill_consumed_since(
-            cutoff, self._mileage_history
+            cutoff, self._mileage_history, self._threshold_km
         )
         return {
             "window": self._window_key,

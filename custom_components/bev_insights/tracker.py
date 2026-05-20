@@ -45,6 +45,7 @@ from .const import (
     SESSION_START_TIMESTAMP,
     SOC_HISTORY_DAYS,
     SOC_HISTORY_KEY_PREFIX,
+    STANDSTILL_MOVEMENT_THRESHOLD_KM,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
     signal_baseline_updated,
@@ -525,14 +526,17 @@ class SocHistory(EntityHistory):
         return consumed
 
     def standstill_consumed_since(
-        self, cutoff: datetime, mileage: MileageHistory
+        self,
+        cutoff: datetime,
+        mileage: MileageHistory,
+        threshold_km: float = STANDSTILL_MOVEMENT_THRESHOLD_KM,
     ) -> float | None:
         """Return SoC% consumed while the car was parked since `cutoff`, or None.
 
         Walks SoC sample intervals chronologically. An interval is counted as
-        standstill if the odometer shows no movement (< 0.1 km) in that period.
-        Upward SoC steps (charging) are always skipped. Returns None when there
-        is no SoC or mileage data to work with.
+        standstill if the odometer advanced by less than `threshold_km` over that
+        period. Upward SoC steps (charging) are always skipped. Returns None when
+        there is no SoC or mileage data to work with.
         """
         if not self._samples or not mileage.has_data:
             return None
@@ -556,7 +560,7 @@ class SocHistory(EntityHistory):
             mileage_end = mileage.value_at(t_end)
             if mileage_start is None or mileage_end is None:
                 continue
-            if mileage_end - mileage_start >= 0.1:
+            if mileage_end - mileage_start >= threshold_km:
                 continue
             consumed += soc_drop
         return consumed

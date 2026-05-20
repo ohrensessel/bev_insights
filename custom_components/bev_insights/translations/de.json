@@ -53,12 +53,14 @@
         "data": {
           "min_measured_range_km": "Mindestfahrtstrecke nach dem Laden (km)",
           "min_measured_range_soc_percent": "Minimaler SoC-Verbrauch nach dem Laden (%)",
-          "history_days": "Verlauf-Aufbewahrungsfenster (Tage)"
+          "history_days": "Verlauf-Aufbewahrungsfenster (Tage)",
+          "standstill_movement_threshold_km": "Erkennungsschwelle für geparktes Fahrzeug (km)"
         },
         "data_description": {
           "min_measured_range_km": "Gemessene Reichweite und Effizienz bleiben nicht verfügbar, bis mindestens diese Strecke seit dem letzten Ladeende gefahren wurde. Standard: 20 km.",
           "min_measured_range_soc_percent": "Und bis mindestens dieser SoC-Anteil verbraucht wurde. Standard: 2 %. Beide Schwellwerte gelten; die SoC-Quantisierung (~1 % bei den meisten BEVs) dominiert den Messfehler darunter.",
-          "history_days": "Wie viele Tage SoC- und Tachometerstand-Aufzeichnungen für die gleitenden Fenstermessungen aufbewahrt werden. Standard: 8. Werte unter 7 führen dazu, dass die 7-Tage-Sensoren dauerhaft im Teildaten-Modus bleiben."
+          "history_days": "Wie viele Tage SoC- und Tachometerstand-Aufzeichnungen für die gleitenden Fenstermessungen aufbewahrt werden. Standard: 8. Werte unter 7 führen dazu, dass die 7-Tage-Sensoren dauerhaft im Teildaten-Modus bleiben.",
+          "standstill_movement_threshold_km": "Ein SoC-Abfall-Intervall wird nur dann als Stillstand (Vampire-Drain) gezählt, wenn der Tachometer weniger als diesen Schwellwert vorgerückt ist. Standard: 0,1 km. Auf 1,0 km erhöhen, wenn Ihre Integration den Kilometerstand in ganzen Kilometern meldet."
         }
       }
     }

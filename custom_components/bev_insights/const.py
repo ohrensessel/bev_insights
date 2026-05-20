@@ -25,6 +25,7 @@ CONF_CAPACITY_ACTUAL_ENTITY = "capacity_actual_entity"
 CONF_MIN_MEASURED_RANGE_KM = "min_measured_range_km"
 CONF_MIN_MEASURED_RANGE_SOC_PERCENT = "min_measured_range_soc_percent"
 CONF_HISTORY_DAYS = "history_days"
+CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM = "standstill_movement_threshold_km"
 
 # Schema version of the config entry payload. Bumped when the shape of
 # `entry.data` changes incompatibly so `async_migrate_entry` can repair
@@ -46,6 +47,11 @@ DEFAULT_CAPACITY_KWH = 77.0
 # change (cold start, accessories) are both filtered out.
 MIN_MEASURED_RANGE_KM = 20.0
 MIN_MEASURED_RANGE_SOC_PERCENT = 2.0
+# Odometer movement below this threshold during a SoC interval is treated as
+# "parked" for the standstill consumption sensor. 0.1 km handles integrations
+# that report mileage in whole kilometres (each sample either stays flat or
+# jumps by ≥1 km), while still ignoring true creep-in-traffic.
+STANDSTILL_MOVEMENT_THRESHOLD_KM = 0.1
 
 # Custom units for efficiency. There's no standard HA unit constant for
 # energy-per-distance / distance-per-energy at this scale.

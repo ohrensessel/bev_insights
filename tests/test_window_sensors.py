@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.bev_insights.const import (
+    CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
     DOMAIN,
     signal_mileage_history_updated,
     signal_soc_history_updated,
@@ -557,6 +558,50 @@ async def test_standstill_consumption_unavailable_without_mileage(
 
     state = _find_state(hass, "_standstill_consumption_rolling_7_days_factory")
     assert state.state in ("unavailable", "unknown")
+
+
+async def test_standstill_consumption_custom_threshold(
+    hass: HomeAssistant,
+) -> None:
+    """With a 2 km threshold, a 1.5 km drive counts as standstill.
+    With the default 0.1 km threshold it would be excluded."""
+    hass.states.async_set(SOC_ENTITY, "80")
+    hass.states.async_set(RANGE_ENTITY, "300", {"unit_of_measurement": "km"})
+    hass.states.async_set(MILEAGE_ENTITY, "10000", {"unit_of_measurement": "km"})
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "70.0")
+    from .common import make_entry
+    entry = make_entry(options={CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM: 2.0})
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    domain_data = hass.data[DOMAIN][entry.entry_id]
+    soc_history = domain_data["soc_history"]
+    mileage_history = domain_data["mileage_history"]
+
+    now = dt_util.utcnow()
+    soc_history._samples.clear()
+    soc_history._samples.extend(
+        [
+            (now - timedelta(days=8), 80.0),
+            (now - timedelta(days=1), 70.0),  # -10% with 1.5 km movement
+        ]
+    )
+    mileage_history._samples.clear()
+    mileage_history._samples.extend(
+        [
+            (now - timedelta(days=8), 10000.0),
+            (now - timedelta(days=1), 10001.5),  # only 1.5 km → < 2 km threshold
+        ]
+    )
+    async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
+    await hass.async_block_till_done()
+
+    # 1.5 km < 2.0 km threshold → whole 10% drop counted as standstill
+    # factory: 77 × 10 / 100 = 7.7 kWh
+    state = _find_state(hass, "_standstill_consumption_rolling_7_days_factory")
+    assert float(state.state) == pytest.approx(7.7)
 
 
 async def test_standstill_consumption_this_week_is_total(
