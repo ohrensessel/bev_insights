@@ -7,6 +7,16 @@ on:
     branches: [main]
 
 jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@v2
+        with:
+          # "brands" validation requires the repo to be listed in the HACS
+          # default store; skip it for a custom-repo integration.
+          ignore: brands
+
   lint:
     runs-on: ubuntu-latest
     steps:

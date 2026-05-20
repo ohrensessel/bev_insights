@@ -4,6 +4,25 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0]
+
+### Added
+- **Configurable standstill movement threshold** (`standstill_movement_threshold_km`,
+  default 0.1 km). Exposed in the options flow alongside the existing
+  measured-range floors. Integrations that report mileage in whole kilometres
+  should raise this to 1.0 km to avoid misclassifying slow-moving intervals
+  as standstill drain.
+- **State-attributes labels** for all 35 sensor entities in both `en.json`
+  and `de.json`. Opaque dict keys (`baseline_mileage_km`,
+  `soc_consumed_standstill_percent`, `partial_window_data`, etc.) now show
+  human-readable labels in the HA entity detail panel.
+- **`tests/test_translations.py`**: four pytest checks that verify de.json
+  mirrors en.json's entity-key set, state-attributes keys, required top-level
+  sections, and options-flow data keys. Runs as part of the normal suite.
+- **`hassfest` CI job** via `hacs/action@v2` in both GitHub and Gitea
+  workflow files. Validates manifest fields, translation schema, and
+  integration structure on every push.
+
 ## [1.1.0]
 
 ### Added

@@ -570,7 +570,6 @@ async def test_standstill_consumption_custom_threshold(
     hass.states.async_set(MILEAGE_ENTITY, "10000", {"unit_of_measurement": "km"})
     hass.states.async_set(CHARGING_ENTITY, "off")
     hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "70.0")
-    from .common import make_entry
     entry = make_entry(options={CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM: 2.0})
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
