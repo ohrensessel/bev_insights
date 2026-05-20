@@ -342,6 +342,13 @@
           "soc_consumed_standstill_percent": { "name": "SoC-Verbrauch im Stand" }
         }
       },
+      "session_log": {
+        "name": "Ladeprotokoll",
+        "state_attributes": {
+          "sessions": { "name": "Sitzungen (neueste zuerst)" },
+          "max_sessions": { "name": "Maximale Anzahl gespeicherter Sitzungen" }
+        }
+      },
       "charge_count_rolling_7_days": {
         "name": "Ladeanzahl (gleitende 7 Tage)",
         "state_attributes": {

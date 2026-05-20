@@ -342,6 +342,13 @@
           "soc_consumed_standstill_percent": { "name": "SoC consumed while parked" }
         }
       },
+      "session_log": {
+        "name": "Session log",
+        "state_attributes": {
+          "sessions": { "name": "Sessions (newest first)" },
+          "max_sessions": { "name": "Max sessions retained" }
+        }
+      },
       "charge_count_rolling_7_days": {
         "name": "Charge count (rolling 7 days)",
         "state_attributes": {

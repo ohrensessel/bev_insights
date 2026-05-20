@@ -41,6 +41,8 @@ from .const import (
     MILEAGE_HISTORY_KEY_PREFIX,
     SESSION_END_SOC_PERCENT,
     SESSION_END_TIMESTAMP,
+    SESSION_LOG_KEY,
+    SESSION_LOG_MAX,
     SESSION_START_SOC_PERCENT,
     SESSION_START_TIMESTAMP,
     SOC_HISTORY_DAYS,
@@ -80,6 +82,8 @@ class ChargeTracker:
         # Most recently completed charging session (set on the falling edge
         # when we have a matching rising-edge sample). Persisted.
         self._last_session: dict[str, Any] | None = None
+        # Rolling log of the last SESSION_LOG_MAX completed sessions.
+        self._session_log: deque[dict[str, Any]] = deque(maxlen=SESSION_LOG_MAX)
         # In-memory only: SoC + timestamp captured on the rising edge of the
         # current charging session. Cleared when the session ends or HA
         # restarts mid-charge (in which case that one cycle won't produce a
@@ -110,6 +114,11 @@ class ChargeTracker:
         last_session = data.get(LAST_SESSION_KEY)
         if isinstance(last_session, dict):
             self._last_session = last_session
+        raw_log = data.get(SESSION_LOG_KEY)
+        if isinstance(raw_log, list):
+            for item in raw_log[-SESSION_LOG_MAX:]:
+                if isinstance(item, dict):
+                    self._session_log.append(item)
 
     @callback
     def async_start(self) -> None:
@@ -144,6 +153,11 @@ class ChargeTracker:
         `end_timestamp`.
         """
         return self._last_session
+
+    @property
+    def session_log(self) -> list[dict[str, Any]]:
+        """Return the session log as a list (oldest first)."""
+        return list(self._session_log)
 
     @property
     def is_charging(self) -> bool:
@@ -234,6 +248,7 @@ class ChargeTracker:
                 SESSION_END_SOC_PERCENT: soc,
                 SESSION_END_TIMESTAMP: end_ts,
             }
+            self._session_log.append(self._last_session)
             self._pending_start = None
 
         self.hass.async_create_task(self._store.async_save(self._persisted_payload()))
@@ -250,6 +265,8 @@ class ChargeTracker:
         payload: dict[str, Any] = dict(self._baseline or {})
         if self._last_session is not None:
             payload[LAST_SESSION_KEY] = self._last_session
+        if self._session_log:
+            payload[SESSION_LOG_KEY] = list(self._session_log)
         return payload
 
 

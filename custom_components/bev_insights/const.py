@@ -108,6 +108,8 @@ BASELINE_TIMESTAMP = "timestamp"
 # same Store payload (so adding them doesn't break v0.7 baseline files —
 # old files just lack the "last_session" key).
 LAST_SESSION_KEY = "last_session"
+SESSION_LOG_KEY = "session_log"
+SESSION_LOG_MAX = 20
 SESSION_START_SOC_PERCENT = "start_soc_percent"
 SESSION_END_SOC_PERCENT = "end_soc_percent"
 SESSION_START_TIMESTAMP = "start_timestamp"

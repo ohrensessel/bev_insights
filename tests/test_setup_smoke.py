@@ -60,10 +60,11 @@ EXPECTED_SUFFIXES = {
     "_days_to_low_soc",
     "_charge_count_rolling_7_days",
     "_charge_count_this_week",
+    "_session_log",
 }
 
 
-async def test_full_entry_creates_all_38_entities(hass: HomeAssistant) -> None:
+async def test_full_entry_creates_all_39_entities(hass: HomeAssistant) -> None:
     hass.states.async_set(SOC_ENTITY, "50")
     hass.states.async_set(RANGE_ENTITY, "200")
     hass.states.async_set(MILEAGE_ENTITY, "10000")
@@ -82,4 +83,4 @@ async def test_full_entry_creates_all_38_entities(hass: HomeAssistant) -> None:
         if e.config_entry_id == entry.entry_id
     }
     assert suffixes == EXPECTED_SUFFIXES
-    assert len(suffixes) == 38
+    assert len(suffixes) == 39

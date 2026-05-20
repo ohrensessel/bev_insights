@@ -64,6 +64,7 @@ from .const import (
     MIN_MEASURED_RANGE_SOC_PERCENT,
     SESSION_END_SOC_PERCENT,
     SESSION_END_TIMESTAMP,
+    SESSION_LOG_MAX,
     SESSION_START_SOC_PERCENT,
     SESSION_START_TIMESTAMP,
     STANDSTILL_MOVEMENT_THRESHOLD_KM,
@@ -136,6 +137,7 @@ async def async_setup_entry(
         )
         entities.append(LastChargedSensor(entry, tracker))
         entities.append(TimeSinceLastChargeSensor(entry, tracker))
+        entities.append(SessionLogSensor(entry, tracker))
 
         # Last charge added (kWh) and average charging power (kW): one of
         # each per capacity variant. Both read from the same persisted
@@ -876,6 +878,41 @@ class TimeSinceLastChargeSensor(_TrackerLinkedMixin, BevDerivedSensor):
         baseline = self._tracker.baseline or {}
         return {
             "last_charge_timestamp": baseline.get(BASELINE_TIMESTAMP),
+        }
+
+
+class SessionLogSensor(_TrackerLinkedMixin, BevDerivedSensor):
+    """Diagnostic log of completed charging sessions.
+
+    State = number of sessions retained (up to SESSION_LOG_MAX).
+    Attributes contain the full list (newest first) with start/end SoC
+    and timestamps so users can audit charging history without leaving HA.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:history"
+    _attr_translation_key = "session_log"
+
+    def __init__(self, entry: ConfigEntry, tracker: ChargeTracker) -> None:
+        super().__init__(entry, source_entities=[])
+        self._tracker = tracker
+        self._attr_unique_id = f"{entry.entry_id}_session_log"
+        self._attr_name = "Session log"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_baseline_updates()
+
+    @callback
+    def _recalculate(self) -> None:
+        self._attr_available = True
+        self._attr_native_value = len(self._tracker.session_log)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "sessions": list(reversed(self._tracker.session_log)),
+            "max_sessions": SESSION_LOG_MAX,
         }
 
 
