@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import homeassistant.components.recorder as _hass_recorder
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -180,15 +181,13 @@ async def test_backfill_from_recorder_populates_history(hass: HomeAssistant) -> 
     mock_instance = MagicMock()
     mock_instance.async_add_executor_job = AsyncMock(return_value=mock_states)
 
-    # get_instance is imported locally inside the function, so patch at the
-    # source module. async_add_executor_job is mocked to return mock_states
+    # patch.object works because _hass_recorder is already in sys.modules;
+    # the local `from ... import get_instance` inside the function then picks
+    # up the mock. async_add_executor_job is mocked to return mock_states
     # directly, bypassing the real _fetch closure.
     hass.config.components.add("recorder")
     try:
-        with patch(
-            "homeassistant.components.recorder.get_instance",
-            return_value=mock_instance,
-        ):
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
             await async_backfill_from_recorder(hass, history, "sensor.soc", days=8)
     finally:
         hass.config.components.remove("recorder")
