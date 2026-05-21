@@ -9,7 +9,7 @@ battery-electric vehicle from a small set of source entities: battery percentage
 remaining range, an optional charging-state indicator, and an optional odometer reading.
 
 > **Tested with:** the [`homeassistant-myskoda`](https://github.com/skodaconnect/homeassistant-myskoda)
-> integration (Škoda Enyaq 85). The source entities are integration-agnostic — any
+> integration (Škoda Enyaq). The source entities are integration-agnostic — any
 > integration that exposes the four entities listed above should work in principle.
 > **Reports welcome** from users on other car integrations: please open an issue
 > describing your setup and whether the derived sensors show sensible values.
