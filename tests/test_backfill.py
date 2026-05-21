@@ -4,14 +4,22 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import homeassistant.components.recorder as _hass_recorder
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bev_insights.backfill import async_backfill_from_recorder
 from custom_components.bev_insights.const import DOMAIN
 from custom_components.bev_insights.tracker import MileageHistory, SocHistory
+
+# The recorder pulls in psutil_home_assistant on some HA builds, which is not
+# installed on the minimum-supported HA test matrix.  Import it optionally so
+# the module still collects; tests that need it are skipped when unavailable.
+try:
+    import homeassistant.components.recorder as _hass_recorder
+except ImportError:  # pragma: no cover - environment-dependent
+    _hass_recorder = None  # type: ignore[assignment]
 
 
 def _entry() -> MockConfigEntry:
@@ -169,6 +177,10 @@ async def test_backfill_from_recorder_skips_when_already_has_data(
     assert history.sample_count == 1  # unchanged
 
 
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
 async def test_backfill_from_recorder_populates_history(hass: HomeAssistant) -> None:
     """Full integration: recorder returns states, history is populated."""
     history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
