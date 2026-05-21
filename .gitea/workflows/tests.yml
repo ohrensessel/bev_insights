@@ -128,3 +128,26 @@ jobs:
 
       - name: Run pytest
         run: pytest -v
+
+  mirror-to-github:
+    # Mirror the repo to GitHub only after lint/mypy/pytest are green on a
+    # push to main. The `pytest` matrix marks the dev-HA row as
+    # `continue-on-error`, so an upstream HA breakage won't block the mirror.
+    # Set the `GH_MIRROR_TOKEN` secret to a fine-grained GitHub PAT scoped to
+    # the bev_insights repo with `Contents: read & write`.
+    needs: [lint, mypy, pytest]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history + tags
+
+      - name: Push to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+        run: |
+          git remote add github \
+            "https://x-access-token:${GH_TOKEN}@github.com/ohrensessel/bev_insights.git"
+          git push github main
+          git push github --tags
