@@ -120,11 +120,37 @@ jobs:
           pip install "setuptools>=60,<80" wheel tzdata "pytest-cov>=5.0"
           pip install "${{ matrix.plugin-spec }}"
 
+      - name: Resolve HA dev commit
+        if: matrix.install-dev-ha
+        id: ha-dev
+        run: |
+          SHA=$(git ls-remote https://github.com/home-assistant/core.git dev | cut -f1)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Cache HA dev wheel
+        if: matrix.install-dev-ha
+        id: ha-dev-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/ha-dev-wheels
+          key: ha-dev-${{ steps.ha-dev.outputs.sha }}-py${{ matrix.python-version }}
+
+      - name: Build HA dev wheel
+        # Building the wheel is the slow part (large git clone + build); we
+        # do it only on cache miss. `--no-deps` keeps the cached artifact
+        # small and lets the install step skip dep re-resolution. The dev
+        # row is `continue-on-error: true`, so a missing new transitive dep
+        # surfaces as a normal job failure rather than blocking CI.
+        if: matrix.install-dev-ha && steps.ha-dev-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/ha-dev-wheels
+          pip wheel --no-deps -w ~/ha-dev-wheels \
+            "homeassistant @ git+https://github.com/home-assistant/core.git@${{ steps.ha-dev.outputs.sha }}"
+
       - name: Override homeassistant with the dev branch
         if: matrix.install-dev-ha
         run: |
-          pip install --upgrade --force-reinstall \
-            "homeassistant @ git+https://github.com/home-assistant/core.git@dev"
+          pip install --upgrade --force-reinstall --no-deps ~/ha-dev-wheels/homeassistant-*.whl
 
       - name: Run pytest
         run: pytest -v
