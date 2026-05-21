@@ -7,16 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  hassfest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hacs/action@22.5.0
-        with:
-          category: integration
-          # "brands" validation requires the repo to be listed in the HACS
-          # default store; skip it for a custom-repo integration.
-          ignore: brands
+  # NOTE: the `hassfest` job lives only in .github/workflows/tests.yml.
+  # The hacs/action validator queries the GitHub API and 401s when run
+  # against a Gitea repo, so we don't mirror it here.
 
   lint:
     runs-on: ubuntu-latest
