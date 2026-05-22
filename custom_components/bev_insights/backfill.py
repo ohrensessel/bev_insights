@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ async def async_backfill_from_recorder(
             history as rec_history,
         )
 
-        def _fetch() -> list[Any]:
+        def _fetch() -> list[State]:
             states = rec_history.state_changes_during_period(
                 hass,
                 start_time,

@@ -11,6 +11,7 @@ the baseline is updated.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Any
@@ -653,17 +654,25 @@ class _TrackerLinkedMixin:
     `_recalculate`, `async_write_ha_state`).
     """
 
+    # Attributes/methods supplied by the host class. Declared here as
+    # PEP 526 annotations (no assignment) so mypy can resolve them on the
+    # mixin without creating runtime attributes that would shadow the
+    # host's implementations under MRO.
     _entry: ConfigEntry
+    hass: HomeAssistant
+    async_on_remove: Callable[[Callable[[], None]], None]
+    async_write_ha_state: Callable[[], None]
+    _recalculate: Callable[[], None]
 
     def _subscribe_baseline_updates(self) -> None:
         @callback
         def _baseline_listener() -> None:
-            self._recalculate()  # type: ignore[attr-defined]
-            self.async_write_ha_state()  # type: ignore[attr-defined]
+            self._recalculate()
+            self.async_write_ha_state()
 
-        self.async_on_remove(  # type: ignore[attr-defined]
+        self.async_on_remove(
             async_dispatcher_connect(
-                self.hass,  # type: ignore[attr-defined]
+                self.hass,
                 signal_baseline_updated(self._entry.entry_id),
                 _baseline_listener,
             )
