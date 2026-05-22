@@ -15,6 +15,9 @@ from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.bev_insights.const import (
+    BASELINE_MILEAGE_KM,
+    BASELINE_SOC_PERCENT,
+    BASELINE_TIMESTAMP,
     CONF_MIN_MEASURED_RANGE_KM,
     CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     DOMAIN,
@@ -564,6 +567,127 @@ async def test_avg_charging_power_zero_soc_delta_is_unavailable(
     await hass.async_block_till_done()
     state = _find_state(hass, "_avg_charging_power_factory")
     assert state.state in ("unavailable", "unknown")
+
+
+# --------------------------------------------------------------------------- #
+# Corrupt-baseline / corrupt-session paths                                    #
+#                                                                             #
+# These cover the defensive "give up cleanly when stored state is partial or  #
+# unparseable" branches in the tracker-linked sensors. The corrupt states     #
+# can't arise from the normal off→on→off flow but can show up in storage     #
+# written by older versions or after a glitched write.                        #
+# --------------------------------------------------------------------------- #
+
+
+def _seed_baseline(hass: HomeAssistant, entry, baseline: dict) -> None:
+    """Replace the tracker's baseline and fire the dispatcher signal."""
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    tracker._baseline = baseline
+    async_dispatcher_send(hass, signal_baseline_updated(entry.entry_id))
+
+
+async def test_last_charged_unavailable_when_baseline_missing_timestamp(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_full(hass)
+    _seed_baseline(
+        hass,
+        entry,
+        {BASELINE_MILEAGE_KM: 10000.0, BASELINE_SOC_PERCENT: 80.0},
+    )
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_last_charged").state in ("unavailable", "unknown")
+
+
+async def test_last_charged_unavailable_when_baseline_timestamp_unparseable(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_full(hass)
+    _seed_baseline(
+        hass,
+        entry,
+        {
+            BASELINE_MILEAGE_KM: 10000.0,
+            BASELINE_SOC_PERCENT: 80.0,
+            BASELINE_TIMESTAMP: "not-a-real-timestamp",
+        },
+    )
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_last_charged").state in ("unavailable", "unknown")
+
+
+async def test_time_since_last_charge_unavailable_on_missing_timestamp(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_full(hass)
+    _seed_baseline(
+        hass,
+        entry,
+        {BASELINE_MILEAGE_KM: 10000.0, BASELINE_SOC_PERCENT: 80.0},
+    )
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_time_since_last_charge").state in (
+        "unavailable",
+        "unknown",
+    )
+
+
+async def test_time_since_last_charge_unavailable_on_unparseable_timestamp(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_full(hass)
+    _seed_baseline(
+        hass,
+        entry,
+        {
+            BASELINE_MILEAGE_KM: 10000.0,
+            BASELINE_SOC_PERCENT: 80.0,
+            BASELINE_TIMESTAMP: "garbage",
+        },
+    )
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_time_since_last_charge").state in (
+        "unavailable",
+        "unknown",
+    )
+
+
+async def test_last_charge_added_unavailable_when_session_missing_soc(
+    hass: HomeAssistant,
+) -> None:
+    """Session with timestamps but no SoC fields → sensor must not crash."""
+    entry = await _setup_full(hass)
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    now = dt_util.utcnow()
+    tracker._last_session = {
+        SESSION_START_TIMESTAMP: (now - timedelta(hours=1)).isoformat(),
+        SESSION_END_TIMESTAMP: now.isoformat(),
+    }
+    async_dispatcher_send(hass, signal_baseline_updated(entry.entry_id))
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_last_charge_added_factory").state in (
+        "unavailable",
+        "unknown",
+    )
+
+
+async def test_avg_charging_power_unavailable_on_unparseable_timestamps(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _setup_full(hass)
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    tracker._last_session = {
+        SESSION_START_SOC_PERCENT: 30.0,
+        SESSION_END_SOC_PERCENT: 80.0,
+        SESSION_START_TIMESTAMP: "not-real",
+        SESSION_END_TIMESTAMP: "also-not-real",
+    }
+    async_dispatcher_send(hass, signal_baseline_updated(entry.entry_id))
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_avg_charging_power_factory").state in (
+        "unavailable",
+        "unknown",
+    )
 
 
 # --------------------------------------------------------------------------- #

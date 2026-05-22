@@ -181,6 +181,54 @@ async def test_backfill_from_recorder_skips_when_already_has_data(
     _hass_recorder is None,
     reason="homeassistant.components.recorder not importable on this HA build",
 )
+async def test_backfill_from_recorder_empty_result_leaves_history_empty(
+    hass: HomeAssistant,
+) -> None:
+    """Recorder returns an empty list → history stays empty, no crash."""
+    history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(return_value=[])
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_from_recorder(hass, history, "sensor.soc", days=8)
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert not history.has_data
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_backfill_from_recorder_swallows_recorder_errors(
+    hass: HomeAssistant,
+) -> None:
+    """A recorder-side exception is logged and swallowed; history stays empty."""
+    history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(
+        side_effect=RuntimeError("recorder exploded")
+    )
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_from_recorder(hass, history, "sensor.soc", days=8)
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert not history.has_data
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
 async def test_backfill_from_recorder_populates_history(hass: HomeAssistant) -> None:
     """Full integration: recorder returns states, history is populated."""
     history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
