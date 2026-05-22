@@ -124,7 +124,7 @@ jobs:
         # it has to be present even on jobs that don't display coverage.
         run: |
           python -m pip install --upgrade pip
-          pip install "setuptools>=60,<80" wheel tzdata "pytest-cov>=5.0"
+          pip install "setuptools>=60,<80" wheel tzdata "pytest-cov>=5.0" "hypothesis>=6.0"
           pip install "${{ matrix.plugin-spec }}"
 
       - name: Resolve HA dev commit
