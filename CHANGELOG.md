@@ -4,6 +4,47 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0]
+
+### Added
+- **Diagnostics download**: HA → *Settings* → *Devices & Services* →
+  BEV Insights → *Download Diagnostics* now produces a JSON dump with
+  the current tracker baseline, last completed session, SoC/mileage
+  history sample counts and bounds, capacity-source description, and
+  the current value of every derived sensor. Useful when filing bug
+  reports.
+- **Recorder backfill on first install**: when the SoC or mileage
+  history deque is empty (fresh install, or `.storage` cleared), the
+  integration queries HA's built-in recorder for the prior 8 days of
+  state changes on the configured source entities and primes the
+  deques. Window-based sensors (rolling 7 days, this week) become
+  useful immediately instead of waiting a week of live recording.
+  Wrapped in try/except so a missing or older recorder API is silently
+  ignored.
+- **Brand logo**: ships a "Battery + waveform" icon under `brand/`.
+
+### Fixed
+- Tolerate HA versions that expose `config_entry` as a read-only
+  property: the legacy storage-migration path used to assign back to it
+  and now uses `hass.config_entries.async_update_entry` instead.
+
+### Internal / development
+- **Test suite expansion**: 67 → 185 tests, 96 % line+branch coverage
+  on production code. New coverage focuses on the recorder backfill
+  module, partial-baseline / corrupt-session sensor branches, and
+  Hypothesis property tests for `_efficiency_value`, `read_float`,
+  `read_distance_km`, and `_post_charge_window`.
+- **`mypy --strict` tightened**: dropped four
+  `# type: ignore[attr-defined]` from the tracker-linked sensor mixin
+  by declaring the host-supplied attributes via PEP 526 annotations;
+  `list[Any]` → `list[State]` in the recorder backfill.
+- **CI/CD changes**: dual workflow split (Gitea + GitHub), with the
+  HACS-action validator running only on GitHub (it 401s on Gitea). The
+  Gitea workflow mirrors to GitHub on green-only pushes to main. The
+  HA-dev pytest row caches the built wheel keyed by the dev branch
+  SHA, reducing per-run install time. Codecov and test-status badges
+  are now in the README.
+
 ## [1.3.0]
 
 ### Added
