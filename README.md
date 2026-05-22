@@ -2,6 +2,15 @@
   <img src="brand/logo.png" alt="BEV Insights" width="420">
 </p>
 
+<p align="center">
+  <a href="https://github.com/ohrensessel/bev_insights/actions/workflows/tests.yml">
+    <img src="https://github.com/ohrensessel/bev_insights/actions/workflows/tests.yml/badge.svg" alt="tests">
+  </a>
+  <a href="https://codecov.io/gh/ohrensessel/bev_insights">
+    <img src="https://codecov.io/gh/ohrensessel/bev_insights/branch/main/graph/badge.svg" alt="coverage">
+  </a>
+</p>
+
 # BEV Insights
 
 A Home Assistant custom integration that derives **up to 41 additional sensors** for a

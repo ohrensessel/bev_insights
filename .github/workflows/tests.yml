@@ -160,4 +160,19 @@ jobs:
           pip install --upgrade --force-reinstall --no-deps ~/ha-dev-wheels/homeassistant-*.whl
 
       - name: Run pytest
-        run: pytest -v
+        # `--cov-report=xml` is appended on top of the term-missing report
+        # configured in pyproject so the Codecov uploader has an artifact
+        # to consume.
+        run: pytest -v --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        # Upload from a single canonical matrix row to avoid double-counting
+        # the same lines under different environments. py3.12 stable is the
+        # row most users run.
+        if: matrix.python-version == '3.12' && matrix.ha-target == 'stable'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
