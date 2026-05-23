@@ -671,6 +671,32 @@ async def test_last_charge_added_unavailable_when_session_missing_soc(
     )
 
 
+async def test_last_charge_added_unavailable_on_unparseable_start_ts(
+    hass: HomeAssistant,
+) -> None:
+    """Session with SoCs but no parseable start timestamp → unavailable.
+
+    Without a valid start_ts we can't anchor `_attr_last_reset`, and
+    reporting a kWh value under a stale anchor would misattribute the
+    energy in HA's sum statistic when LTS rolls over.
+    """
+    entry = await _setup_full(hass)
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    now = dt_util.utcnow()
+    tracker._last_session = {
+        SESSION_START_SOC_PERCENT: 30.0,
+        SESSION_END_SOC_PERCENT: 80.0,
+        SESSION_START_TIMESTAMP: "not-a-real-timestamp",
+        SESSION_END_TIMESTAMP: now.isoformat(),
+    }
+    async_dispatcher_send(hass, signal_baseline_updated(entry.entry_id))
+    await hass.async_block_till_done()
+    assert _find_state(hass, "_last_charge_added_factory").state in (
+        "unavailable",
+        "unknown",
+    )
+
+
 async def test_avg_charging_power_unavailable_on_unparseable_timestamps(
     hass: HomeAssistant,
 ) -> None:

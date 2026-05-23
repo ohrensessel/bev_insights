@@ -370,19 +370,20 @@ class LastChargeAddedSensor(_TrackerLinkedMixin, BevDerivedSensor):
 
         start_soc = session.get(SESSION_START_SOC_PERCENT)
         end_soc = session.get(SESSION_END_SOC_PERCENT)
-        if start_soc is None or end_soc is None:
+        # last_reset advances to the start of each new session, so LTS
+        # treats each session as its own accumulation window. Without a
+        # valid start_ts we'd reuse the previous reset and the new
+        # session's kWh would be misattributed in the sum statistic — so
+        # bail instead of reporting a value with stale anchor.
+        start_ts = dt_util.parse_datetime(
+            session.get(SESSION_START_TIMESTAMP) or ""
+        )
+        if start_soc is None or end_soc is None or start_ts is None:
             self._attr_available = False
             self._attr_native_value = None
             return
 
-        # last_reset advances to the start of each new session, so LTS
-        # treats each session as its own accumulation window.
-        start_ts = dt_util.parse_datetime(
-            session.get(SESSION_START_TIMESTAMP) or ""
-        )
-        if start_ts is not None:
-            self._attr_last_reset = start_ts
-
+        self._attr_last_reset = start_ts
         soc_delta = max(0.0, end_soc - start_soc)
         self._attr_available = True
         self._attr_native_value = round(capacity_kwh * soc_delta / 100.0, 2)

@@ -154,11 +154,17 @@ async def test_energy_consumed_fresh_install_uses_oldest_as_anchor(
 async def test_energy_consumed_this_week_is_total_with_last_reset(
     hass: HomeAssistant,
 ) -> None:
-    """`this_week` variant uses state_class=TOTAL and exposes the current
-    week's Monday-00:00 as `last_reset` — clean LTS bookkeeping. The
-    `rolling_7_days` variant deliberately has no state_class because a
-    sliding window doesn't reset and HA rejects MEASUREMENT alongside
-    device_class=ENERGY."""
+    """LTS classification differs between the two window shapes.
+
+    `this_week` is `device_class=ENERGY` + `state_class=TOTAL` with
+    `last_reset` pinned to the current week's Monday-00:00 — clean
+    per-week sum LTS plus Energy Dashboard eligibility.
+
+    `rolling_7_days` drops the ENERGY device class so MEASUREMENT is
+    allowed (HA rejects ENERGY+MEASUREMENT, and ENERGY+TOTAL on a
+    sliding window would lie to the Energy Dashboard). MEASUREMENT
+    gives the user min/max/mean LTS for trending the rolling figure.
+    """
     entry = await _setup_full(hass)
     soc_history, _ = _histories(hass, entry)
 
@@ -176,13 +182,15 @@ async def test_energy_consumed_this_week_is_total_with_last_reset(
     weekly = _find_state(hass, "_energy_consumed_this_week_factory")
     rolling = _find_state(hass, "_energy_consumed_rolling_7_days_factory")
 
-    # this_week: declared TOTAL, with last_reset matching the cutoff.
+    # this_week: ENERGY device class + TOTAL state class + last_reset.
+    assert weekly.attributes["device_class"] == "energy"
     assert weekly.attributes["state_class"] == "total"
     assert "last_reset" in weekly.attributes
     assert weekly.attributes["last_reset"] == weekly.attributes["window_start"]
 
-    # rolling_7_days: no state_class at all (omitted on purpose).
-    assert "state_class" not in rolling.attributes
+    # rolling_7_days: no ENERGY device class; MEASUREMENT state class.
+    assert rolling.attributes.get("device_class") is None
+    assert rolling.attributes["state_class"] == "measurement"
 
 
 async def test_energy_consumed_unavailable_when_actual_capacity_missing(

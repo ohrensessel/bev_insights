@@ -4,6 +4,39 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Rolling-7-day window sensors now produce Long-Term Statistics**.
+  `energy_consumed_rolling_7_days_*`, `standstill_consumption_rolling_7_days_*`,
+  and `charge_count_rolling_7_days` previously had no state class — HA
+  rejects `ENERGY` + `MEASUREMENT` and a sliding `TOTAL` would mislead
+  the Energy Dashboard, so LTS for these sensors was off entirely. The
+  two energy sensors now drop their `device_class=energy` (they were
+  ineligible for the Energy Dashboard anyway, since a rolling window
+  isn't an accumulator) and gain `state_class=measurement`; the charge-
+  count sensor gains `state_class=measurement` directly. All three now
+  produce min/max/mean LTS curves so users can chart trends.
+- The `this_week` variants are unchanged and remain
+  `device_class=energy` + `state_class=total` for clean per-week sum
+  curves and Energy Dashboard compatibility.
+
+### Fixed
+- **`last_charge_added_*` no longer reports a value when the session's
+  start timestamp can't be parsed.** Previously the sensor would expose
+  the kWh figure under a stale `last_reset`, causing HA's LTS sum to
+  misattribute the energy to the previous session's cycle. With no
+  parseable start timestamp the sensor now goes `unavailable`.
+
+### Internal / development
+- **New LTS-compliance test suite** (`tests/test_lts_compliance.py`):
+  for every derived entity, asserts the `(device_class, state_class)`
+  pair is in HA's `DEVICE_CLASS_STATE_CLASSES` allow-set and the unit
+  is in `DEVICE_CLASS_UNITS`. HA only warns on violations today, so
+  this guards against silent LTS degradation when HA tightens the
+  tables further. Also enforces that every TOTAL sensor with a live
+  value publishes `last_reset`.
+
 ## [1.5.0]
 
 ### Added

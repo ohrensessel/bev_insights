@@ -110,20 +110,21 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
     `soc_consumed_percent` comes from SocHistory.consumed_since() and
     correctly ignores upward SoC steps (i.e. charging) within the window.
 
-    State class differs by window shape:
+    LTS strategy differs by window shape:
     - `this_week` is a calendar-bound total that resets at local Monday
-      00:00, so we declare `SensorStateClass.TOTAL` and update
-      `_attr_last_reset` to the current week's start on every recalc.
-      That gives HA's Long-Term Statistics a clean per-week curve.
+      00:00. Declared `device_class=ENERGY` + `state_class=TOTAL` with
+      `_attr_last_reset` set to the current week's start on every recalc,
+      so HA's Long-Term Statistics produces a clean per-week sum curve
+      AND the sensor is eligible for the Energy Dashboard.
     - `rolling_7_days` slides continuously and can decrease as old
-      samples roll out of the window — neither TOTAL nor MEASUREMENT
-      describes it accurately, and HA rejects MEASUREMENT alongside
-      `device_class=ENERGY`. We leave the state class unset so the
-      recorder skips LTS for this one; it still shows up in the
-      energy-class UI like normal.
+      samples roll out. HA rejects `ENERGY` + `MEASUREMENT` (only
+      TOTAL/TOTAL_INCREASING are allowed for ENERGY) and a sliding TOTAL
+      would lie to the Energy Dashboard, so we drop the device class
+      entirely and use `MEASUREMENT`. LTS records min/max/mean of the
+      rolling figure — useful for trending without polluting the
+      energy-totals UI.
     """
 
-    _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:lightning-bolt-circle"
     _attr_suggested_display_precision = 2
@@ -149,7 +150,10 @@ class EnergyConsumedWindowSensor(_WindowedSensor):
         self._capacity = capacity
         self._capacity_variant = capacity_variant
         if window_key == "this_week":
+            self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_state_class = SensorStateClass.TOTAL
+        else:
+            self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = (
             f"{entry.entry_id}_energy_consumed_"
             f"{window_key}_{capacity_variant}"
@@ -203,12 +207,16 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
     and excluded. The result is the kWh bled away by the car's electronics while
     sitting parked.
 
-    State class follows the same pattern as `EnergyConsumedWindowSensor`:
-    `TOTAL` for the calendar-week variant (resets Monday 00:00), unset for
-    the rolling-7-day variant (sliding windows can't be accumulators).
+    LTS strategy mirrors `EnergyConsumedWindowSensor`:
+    - `this_week`: `device_class=ENERGY` + `state_class=TOTAL` with
+      `_attr_last_reset` set to the week start → per-week sum LTS plus
+      Energy Dashboard eligibility.
+    - `rolling_7_days`: no device class + `state_class=MEASUREMENT`
+      (ENERGY rejects MEASUREMENT, and ENERGY+TOTAL on a sliding window
+      would mislead the Energy Dashboard) → min/max/mean LTS, no
+      energy-totals role.
     """
 
-    _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:sleep"
     _attr_suggested_display_precision = 2
@@ -242,7 +250,10 @@ class StandstillConsumptionWindowSensor(_WindowedSensor):
             )
         )
         if window_key == "this_week":
+            self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_state_class = SensorStateClass.TOTAL
+        else:
+            self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = (
             f"{entry.entry_id}_standstill_consumption_"
             f"{window_key}_{capacity_variant}"
@@ -384,11 +395,16 @@ class ChargeCountWindowSensor(_WindowedSensor):
     A session is a contiguous run of upward SoC steps totalling ≥ 5 %,
     which filters out quantization noise while catching every real charge.
 
-    No capacity variants — count is independent of battery size.
+    No capacity variants — count is independent of battery size. No
+    device class either (HA has no "count" device class), which means
+    MEASUREMENT is unconstrained.
 
-    `this_week` uses `SensorStateClass.TOTAL` so LTS produces a per-week
-    charge-count curve; the rolling variant omits a state class (a sliding
-    window can decrease as old sessions roll out).
+    LTS strategy:
+    - `this_week`: `state_class=TOTAL` + `_attr_last_reset` at the week
+      start → per-week sum curve.
+    - `rolling_7_days`: `state_class=MEASUREMENT` → min/max/mean LTS,
+      letting users trend "average rolling-7-day charge count" without
+      the sliding window pretending to be an accumulator.
     """
 
     _attr_native_unit_of_measurement = "charges"
@@ -412,6 +428,8 @@ class ChargeCountWindowSensor(_WindowedSensor):
         self._soc_history = soc_history
         if window_key == "this_week":
             self._attr_state_class = SensorStateClass.TOTAL
+        else:
+            self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = f"{entry.entry_id}_charge_count_{window_key}"
         self._attr_translation_key = f"charge_count_{window_key}"
         self._attr_name = f"Charge count ({window_label.lower()})"
