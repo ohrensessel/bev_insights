@@ -7,6 +7,7 @@
   "issue_tracker": "https://github.com/ohrensessel/bev_insights/issues",
   "codeowners": ["@ohrensessel"],
   "dependencies": [],
+  "after_dependencies": ["recorder"],
   "requirements": [],
   "iot_class": "calculated",
   "integration_type": "service"
