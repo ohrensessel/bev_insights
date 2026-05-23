@@ -5,6 +5,11 @@
 python_version = "3.12"
 strict = true
 files = ["custom_components/bev_insights"]
+# Submodules under `sensor/` import siblings as
+# `from custom_components.bev_insights.X` (TID252 bans `from ..X`),
+# so mypy needs to recognize the repo root as the package base.
+mypy_path = "."
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = ["pytest_homeassistant_custom_component.*", "voluptuous.*"]
