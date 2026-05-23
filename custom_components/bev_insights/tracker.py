@@ -64,6 +64,35 @@ from .util import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Wait this long before flushing a history deque to disk. State-change
+# events can arrive in bursts during fast charging or while driving; the
+# delay lets multiple writes coalesce into one. ChargeTracker bypasses
+# this and writes immediately because charge-end events are rare and
+# important — losing one to a crash is not acceptable.
+_HISTORY_PERSIST_DELAY_SEC: float = 10.0
+
+
+class _MigratableStore(Store[dict[str, Any]]):
+    """`Store` subclass with a no-op migration hook.
+
+    The hook is in place so future bumps of STORAGE_VERSION can plug in
+    a real migration function without changing the construction sites.
+    Until then, data is returned as-is; this method is only called when
+    the on-disk version is older than STORAGE_VERSION, which can't
+    happen today.
+    """
+
+    # homeassistant-stubs declares the return type as `None`, but the
+    # actual HA contract is to return the migrated `_T`. Ignore the
+    # bogus stub mismatch rather than crippling the override.
+    async def _async_migrate_func(  # type: ignore[override]
+        self,
+        old_major_version: int,
+        old_minor_version: int,
+        old_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        return old_data
+
 
 class ChargeTracker:
     """Tracks the last charge-end event for one vehicle/config entry."""
@@ -81,7 +110,7 @@ class ChargeTracker:
         self._charging_entity = charging_entity
         self._mileage_entity = mileage_entity
         self._soc_entity = soc_entity
-        self._store: Store[dict[str, Any]] = Store(
+        self._store: Store[dict[str, Any]] = _MigratableStore(
             hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{entry.entry_id}"
         )
         self._baseline: dict[str, Any] | None = None
@@ -309,7 +338,7 @@ class EntityHistory:
         self.hass = hass
         self.entry = entry
         self._source_entity = source_entity
-        self._store: Store[dict[str, Any]] = Store(
+        self._store: Store[dict[str, Any]] = _MigratableStore(
             hass,
             STORAGE_VERSION,
             f"{storage_key_prefix}.{entry.entry_id}",
@@ -358,6 +387,11 @@ class EntityHistory:
         if self._unsub:
             self._unsub()
             self._unsub = None
+        # Flush any delayed write that's still pending. `async_save` cancels
+        # the scheduled `async_delay_save` and writes immediately, so this
+        # is the right cleanup hook regardless of which path queued data.
+        if self._samples:
+            await self._store.async_save(self._payload())
 
     # Read API ---------------------------------------------------------- #
 
@@ -430,7 +464,9 @@ class EntityHistory:
             self._samples.append((state.last_updated, value))
         if self._samples:
             self._prune(now)
-            await self._persist()
+            # Backfill is a one-time path; flush immediately so the
+            # primed deque survives a crash within the delay window.
+            await self._store.async_save(self._payload())
 
     def _backfill_parse(self, state: State) -> float | None:
         """Parse a historical State for backfill. Override in subclasses."""
@@ -469,7 +505,10 @@ class EntityHistory:
 
         self._samples.append((now, value))
         self._prune(now)
-        self.hass.async_create_task(self._persist())
+        # `async_delay_save` collapses bursts of state changes into one
+        # disk write per `_HISTORY_PERSIST_DELAY_SEC`. Worst-case data
+        # loss on a hard crash is that many seconds of recent samples.
+        self._store.async_delay_save(self._payload, _HISTORY_PERSIST_DELAY_SEC)
         async_dispatcher_send(self.hass, self._signal())
 
     def _prune(self, now: datetime) -> None:
@@ -477,14 +516,14 @@ class EntityHistory:
         while self._samples and self._samples[0][0] < cutoff:
             self._samples.popleft()
 
-    async def _persist(self) -> None:
-        payload = {
+    def _payload(self) -> dict[str, Any]:
+        """Serialize the current deque for persistence."""
+        return {
             "samples": [
                 {"timestamp": ts.isoformat(), self._value_key: value}
                 for ts, value in self._samples
             ]
         }
-        await self._store.async_save(payload)
 
 
 class MileageHistory(EntityHistory):

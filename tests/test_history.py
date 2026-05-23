@@ -248,7 +248,7 @@ async def test_async_load_drops_samples_past_max_age(
             (now - timedelta(days=2), 200.0),
         ]
     )
-    await history_a._persist()
+    await history_a._store.async_save(history_a._payload())
 
     history_b = MileageHistory(hass, entry, mileage_entity="sensor.odo")
     await history_b.async_load()
