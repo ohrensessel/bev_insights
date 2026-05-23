@@ -71,6 +71,10 @@
     "v1_capacity_migration": {
       "title": "BEV Insights: reconfigure required for \"{title}\"",
       "description": "Your BEV Insights configuration uses the pre-v0.7 actual-capacity format (was a fixed number; now an entity reference). The previous value was **{old_kwh} kWh** — create an `input_number` helper with that value in **Settings → Devices & services → Helpers**, then open the BEV Insights integration card and click **Configure** to point it at the new helper. This repair entry will clear automatically once setup succeeds."
+    },
+    "missing_source_entity": {
+      "title": "BEV Insights: source entity `{entity_id}` is no longer available",
+      "description": "The entity **{entity_id}** is configured as the **{conf_key}** for the BEV Insights integration **\"{title}\"** but Home Assistant doesn't know it. Common causes:\n\n- The upstream integration that exposed it was uninstalled or hasn't loaded.\n- The entity was renamed.\n- You restored from a backup without the upstream integration.\n\nDerived sensors that depend on this entity will be unavailable. Open the BEV Insights integration card and click **Configure** to point it at a replacement entity. This issue clears automatically once the entity is back."
     }
   },
   "entity": {
