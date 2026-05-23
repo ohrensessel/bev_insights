@@ -4,6 +4,27 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0]
+
+### Added
+- **Repair issues for missing source entities**: when a configured
+  source (SoC, range, charging, mileage, actual-capacity entity) is no
+  longer registered with Home Assistant — typical causes: the user
+  renamed the entity, uninstalled the upstream integration, or
+  restored from a backup without it — a repair issue is filed in HA's
+  Repairs panel with a clear pointer to the affected config field and
+  a reminder to reconfigure. The issue clears automatically as soon as
+  the entity is back. Includes en/de translations.
+
+### Changed
+- **Internal: `sensor.py` split into a package**. The 2k-line module is
+  now a `sensor/` package with six themed submodules
+  (`base`, `formulas`, `instantaneous`, `tracker_linked`, `distance`,
+  `window`). No behavioural or API change — the platform entry point,
+  every entity class, and the underscore helpers used by tests are
+  re-exported from `sensor/__init__.py` so existing imports continue
+  to resolve.
+
 ## [1.4.2]
 
 ### Changed
