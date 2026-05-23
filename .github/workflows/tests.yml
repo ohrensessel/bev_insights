@@ -152,8 +152,11 @@ jobs:
         if: matrix.install-dev-ha && steps.ha-dev-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/ha-dev-wheels
+          # Archive endpoint instead of git+: a ~30 MB tarball of the tree
+          # at the SHA, no git history, fetched from GitHub's CDN. Skips
+          # pip's git clone step on cache misses.
           pip wheel --no-deps -w ~/ha-dev-wheels \
-            "homeassistant @ git+https://github.com/home-assistant/core.git@${{ steps.ha-dev.outputs.sha }}"
+            "homeassistant @ https://github.com/home-assistant/core/archive/${{ steps.ha-dev.outputs.sha }}.tar.gz"
 
       - name: Override homeassistant with the dev branch
         if: matrix.install-dev-ha
