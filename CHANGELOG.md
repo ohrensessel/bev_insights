@@ -4,6 +4,28 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1]
+
+### Fixed
+- **`manifest.json` now declares `recorder` as `after_dependencies`**.
+  The first-install recorder backfill (1.4.0) imports
+  `homeassistant.components.recorder`; hassfest's `[DEPENDENCIES]` check
+  required the declaration. `after_dependencies` (not `dependencies`)
+  is correct because the import is wrapped in try/except and gated on
+  the component being loaded — users who disabled the recorder still
+  load BEV Insights normally.
+- **`manifest.json` key order** now matches hassfest's expected order:
+  `domain` and `name` first, remaining keys alphabetical.
+
+### Internal / development
+- **CI**: pytest job installs `hypothesis` (the property tests were
+  added in 1.4.0 but the install step needed updating).
+- **CI**: the HA-dev wheel build now fetches the source tree via
+  GitHub's archive endpoint (`/archive/<sha>.tar.gz`) instead of `git+`,
+  skipping the full-repo clone on cache misses.
+- **CI (GitHub)**: hassfest action runs in addition to `hacs/action`,
+  catching the manifest issues fixed above.
+
 ## [1.4.0]
 
 ### Added
