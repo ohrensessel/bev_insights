@@ -4,6 +4,14 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2]
+
+### Changed
+- **Brand assets moved** from `brand/` to
+  `custom_components/bev_insights/brand/` so HACS can locate them under
+  the integration folder. README image link updated; no functional
+  change.
+
 ## [1.4.1]
 
 ### Fixed

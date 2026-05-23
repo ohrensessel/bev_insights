@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/logo.png" alt="BEV Insights" width="420">
+  <img src="custom_components/bev_insights/brand/logo.png" alt="BEV Insights" width="420">
 </p>
 
 <p align="center">
