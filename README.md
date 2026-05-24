@@ -49,35 +49,30 @@ remaining range, an optional charging-state indicator, and an optional odometer 
 | Time since last charge | Hours elapsed since the most recent charge end (advances hourly) |
 | Last charge added (factory, actual) | kWh added during the most recent completed charging session |
 | Average charging power (factory, actual) | kW averaged across the most recent completed session — `kWh_added / duration`. Useful for distinguishing AC vs. DC fast charging and spotting throttled chargers. |
+| Session log (diagnostic) | Newest-first list of the last 20 completed sessions (start/end SoC + timestamps) as attributes; state is the count. |
 
 The measured-range and measured-efficiency sensors are suppressed during charging and for
 the first 20 km / 2 % SoC after a charge end — below those thresholds the calculation is
 dominated by SoC quantization noise.
 
-### Window sensors (requires mileage sensor)
+### Window sensors
 
 Two windows: **rolling 7 days** (trailing 168 h) and **this calendar week** (local Monday 00:00).
+Most need the mileage sensor; a few work with SoC alone (noted below).
 
-| Entity | Unit |
-|---|---|
-| Distance driven (rolling 7 days) | km |
-| Distance driven (this week) | km |
-| Energy consumed (rolling 7 days, factory capacity) | kWh |
-| Energy consumed (rolling 7 days, actual capacity) | kWh |
-| Energy consumed (this week, factory capacity) | kWh |
-| Energy consumed (this week, actual capacity) | kWh |
-| Average efficiency (rolling 7 days, factory capacity, kWh/100 km) | kWh/100 km |
-| Average efficiency (rolling 7 days, factory capacity, km/kWh) | km/kWh |
-| Average efficiency (rolling 7 days, actual capacity, kWh/100 km) | kWh/100 km |
-| Average efficiency (rolling 7 days, actual capacity, km/kWh) | km/kWh |
-| Average efficiency (this week, factory capacity, kWh/100 km) | kWh/100 km |
-| Average efficiency (this week, factory capacity, km/kWh) | km/kWh |
-| Average efficiency (this week, actual capacity, kWh/100 km) | kWh/100 km |
-| Average efficiency (this week, actual capacity, km/kWh) | km/kWh |
-| Standstill consumption (rolling 7 days, factory capacity) | kWh |
-| Standstill consumption (rolling 7 days, actual capacity) | kWh |
-| Standstill consumption (this week, factory capacity) | kWh |
-| Standstill consumption (this week, actual capacity) | kWh |
+| Entity | Unit | Needs mileage? |
+|---|---|---|
+| Distance driven (rolling 7 days) | km | yes |
+| Distance driven (this week) | km | yes |
+| Energy consumed (rolling 7 days, factory + actual capacity) | kWh | no |
+| Energy consumed (this week, factory + actual capacity) | kWh | no |
+| Average efficiency (rolling 7 days × {factory, actual} × {kWh/100 km, km/kWh}) | kWh/100 km or km/kWh | yes |
+| Average efficiency (this week × {factory, actual} × {kWh/100 km, km/kWh}) | kWh/100 km or km/kWh | yes |
+| Standstill consumption (rolling 7 days, factory + actual capacity) | kWh | yes |
+| Standstill consumption (this week, factory + actual capacity) | kWh | yes |
+| Standstill ratio (rolling 7 days, this week) | % | yes |
+| Charge count (rolling 7 days, this week) | charges | no |
+| Days to low SoC | d | no |
 
 Energy-consumed sensors sum only **downward** SoC steps in the window, so charging events
 inside the window don't inflate the figure — the number reflects driving consumption only.
@@ -86,11 +81,38 @@ Standstill-consumption sensors split that driving figure further: for each SoC d
 window they check whether the odometer advanced. Intervals where the car didn't move are
 counted as parked vampire drain; intervals with movement are attributed to driving and
 excluded. The sum of driving consumption and standstill consumption equals total energy
-consumed in the window.
+consumed in the window. The standstill **ratio** sensor expresses the vampire-drain share
+as a percentage of total consumption — useful for spotting unusually high parasitic drain.
+
+The charge-count sensors record how many distinct charging sessions completed in the
+window. A "session" is a contiguous run of upward SoC steps totalling ≥ 5 %, which filters
+quantization noise.
+
+Days-to-low-SoC projects how many days remain until SoC reaches a configurable threshold
+(default 20 %), based on the rolling-7-day average consumption rate.
 
 On a fresh install the window sensors fall back to the oldest available sample as the
 window anchor and expose `partial_window_data: true` in their attributes until enough
-history has accumulated.
+history has accumulated. As of v1.4.0 the integration also backfills 8 days of SoC and
+mileage samples from HA's recorder on first install, so the window sensors often light up
+immediately rather than after a week of live recording.
+
+## When sensors become available
+
+A condensed map of what each sensor cluster needs before it stops reporting
+`unavailable`. If something on your dashboard is blank, this is usually why.
+
+| Trigger | Sensors |
+|---|---|
+| **Immediately** (SoC + range sources exist; capacity helper for some) | Full battery range, Efficiency (×4), State of Health, Session log (shows 0 until first cycle), Charge count (shows 0 until first charge in window) |
+| **First charge end detected** (trailing edge of any charging session) | Last charged, Time since last charge |
+| **First full charge cycle completes** (off → on → off) | Last charge added (×2), Average charging power (×2) |
+| **First charge end + enough post-charge driving** (≥ 20 km / 2 % SoC, tuneable) | Measured full range, Measured efficiency (×4) |
+| **SoC / mileage history accumulates** (or is backfilled from HA's recorder on first install — v1.4.0+) | Distance driven, Energy consumed, Average efficiency, Standstill consumption + ratio, Days to low SoC |
+
+Once a sensor has populated, going back to `unavailable` usually means a source entity
+went away (renamed, integration unloaded, restored without it). The **Repairs** panel
+will surface a fix-it card pointing at the missing entity (v1.5.0+).
 
 ## Installation
 
@@ -147,10 +169,11 @@ accumulates them rather than treating the reset-to-zero as data corruption.
 The *actual* capacity variants are usually the better choice for an aging battery; switch
 to the *factory* variants if you trust the nameplate number more.
 
-The rolling-7-day variants deliberately omit a state class because a sliding window isn't
-an accumulator — they show up in dashboards as regular numeric sensors but won't feed the
-Energy Dashboard's running totals. The standstill-consumption sensors follow the same
-convention and are not suitable for the Energy Dashboard either.
+The **rolling-7-day** variants of `energy_consumed_*`, `standstill_consumption_*`, and
+`charge_count_*` carry `state_class=MEASUREMENT` (no device class on the energy ones —
+a sliding window isn't an accumulator and HA's Energy Dashboard would mis-attribute the
+totals). HA still records min/max/mean Long-Term Statistics for them, so you can trend
+the rolling figures in the Statistics card, but they don't feed the Energy Dashboard.
 
 ### Tuning the integration
 
