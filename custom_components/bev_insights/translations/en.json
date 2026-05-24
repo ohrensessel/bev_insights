@@ -75,6 +75,22 @@
     "missing_source_entity": {
       "title": "BEV Insights: source entity `{entity_id}` is no longer available",
       "description": "The entity **{entity_id}** is configured as the **{conf_key}** for the BEV Insights integration **\"{title}\"** but Home Assistant doesn't know it. Common causes:\n\n- The upstream integration that exposed it was uninstalled or hasn't loaded.\n- The entity was renamed.\n- You restored from a backup without the upstream integration.\n\nDerived sensors that depend on this entity will be unavailable. Open the BEV Insights integration card and click **Configure** to point it at a replacement entity. This issue clears automatically once the entity is back."
+    },
+    "value_capacity_out_of_range": {
+      "title": "BEV Insights: actual capacity `{entity_id}` reports an implausible value",
+      "description": "The actual-capacity helper **{entity_id}** for **\"{title}\"** is **{value} kWh** — outside the plausible {min_kwh}–{max_kwh} kWh range for a BEV. Common causes:\n\n- A typo on the `input_number` helper (e.g. `770` instead of `77`).\n- The wrong entity is selected — pointing at SoC % or another non-capacity sensor.\n\nThe `actual capacity` variant of every efficiency, range and energy sensor is computed from this value, so wrong values silently degrade those sensors. Update the helper or reconfigure the integration to point at the correct entity. This issue clears automatically once the value is back in range."
+    },
+    "value_soc_out_of_range": {
+      "title": "BEV Insights: SoC source `{entity_id}` reports {value} %",
+      "description": "The SoC source **{entity_id}** for **\"{title}\"** is reporting **{value} %** — outside the valid 0–100 % range. This usually indicates a bug in the upstream integration. The integration clamps the value before using it, so derived sensors keep working, but the underlying data is wrong and should be investigated. This issue clears automatically once the reported value is back in range."
+    },
+    "value_mileage_went_backwards": {
+      "title": "BEV Insights: odometer `{entity_id}` went backwards",
+      "description": "The mileage source **{entity_id}** for **\"{title}\"** dropped from **{previous_km} km** to **{current_km} km**. Distance-based sensors clamp negative deltas to zero so they don't report nonsense, but the underlying data is wrong — usually a bug in the upstream integration, an entity rename that re-used the same ID, or a manual edit to the odometer. This issue clears automatically once the odometer climbs back past the previous peak."
+    },
+    "value_unknown_distance_unit": {
+      "title": "BEV Insights: `{entity_id}` reports an unknown unit (`{unit}`)",
+      "description": "The **{conf_key}** entity **{entity_id}** for **\"{title}\"** reports its value in **`{unit}`**, which BEV Insights doesn't know how to convert to kilometres. It falls back to treating the value as kilometres, which is almost certainly wrong if the entity is actually using miles, metres or something else. Fix the upstream entity's `unit_of_measurement` attribute, or pick a different source entity from **Configure**. This issue clears automatically once the unit changes to a recognised one (`km`, `mi`, `m`)."
     }
   },
   "entity": {

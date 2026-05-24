@@ -75,6 +75,22 @@
     "missing_source_entity": {
       "title": "BEV Insights: Quell-Entity `{entity_id}` ist nicht mehr verfügbar",
       "description": "Die Entity **{entity_id}** ist als **{conf_key}** für die BEV Insights-Integration **\"{title}\"** konfiguriert, aber Home Assistant kennt sie nicht. Häufige Ursachen:\n\n- Die zuliefernde Integration wurde deinstalliert oder ist nicht geladen.\n- Die Entity wurde umbenannt.\n- Sie haben aus einem Backup wiederhergestellt, ohne die zuliefernde Integration einzurichten.\n\nAbgeleitete Sensoren, die diese Entity verwenden, werden nicht verfügbar sein. Öffnen Sie die BEV Insights-Integrationskarte und klicken Sie auf **Konfigurieren**, um eine Ersatz-Entity auszuwählen. Dieser Eintrag wird automatisch gelöscht, sobald die Entity wieder verfügbar ist."
+    },
+    "value_capacity_out_of_range": {
+      "title": "BEV Insights: tatsächliche Kapazität `{entity_id}` meldet einen unplausiblen Wert",
+      "description": "Der Helfer für die tatsächliche Kapazität **{entity_id}** für **\"{title}\"** meldet **{value} kWh** — außerhalb des plausiblen Bereichs von {min_kwh}–{max_kwh} kWh für ein BEV. Häufige Ursachen:\n\n- Tippfehler beim `input_number`-Helfer (z. B. `770` statt `77`).\n- Falsche Entity ausgewählt — etwa ein SoC-Sensor anstelle einer Kapazitäts-Entity.\n\nDie Variante `actual capacity` jeder Effizienz-, Reichweiten- und Energiekennzahl wird aus diesem Wert berechnet, falsche Werte verschlechtern diese Sensoren also still. Aktualisieren Sie den Helfer oder konfigurieren Sie die Integration neu, um auf die korrekte Entity zu zeigen. Dieser Eintrag verschwindet automatisch, sobald der Wert wieder im Bereich liegt."
+    },
+    "value_soc_out_of_range": {
+      "title": "BEV Insights: SoC-Quelle `{entity_id}` meldet {value} %",
+      "description": "Die SoC-Quelle **{entity_id}** für **\"{title}\"** meldet **{value} %** — außerhalb des gültigen Bereichs 0–100 %. Dies deutet meist auf einen Fehler in der zuliefernden Integration hin. BEV Insights begrenzt den Wert vor der Verwendung, abgeleitete Sensoren arbeiten also weiter, die zugrundeliegenden Daten sind aber falsch und sollten untersucht werden. Dieser Eintrag verschwindet automatisch, sobald der gemeldete Wert wieder im Bereich liegt."
+    },
+    "value_mileage_went_backwards": {
+      "title": "BEV Insights: Kilometerstand `{entity_id}` ist rückwärts gegangen",
+      "description": "Die Kilometerstand-Quelle **{entity_id}** für **\"{title}\"** ist von **{previous_km} km** auf **{current_km} km** gefallen. Streckenbasierte Sensoren begrenzen negative Differenzen auf null, damit sie keinen Unsinn melden, aber die zugrundeliegenden Daten sind falsch — meist ein Fehler in der zuliefernden Integration, eine Umbenennung mit wiederverwendeter Entity-ID oder eine manuelle Änderung des Kilometerstands. Dieser Eintrag verschwindet automatisch, sobald der Kilometerstand den vorherigen Spitzenwert wieder überschreitet."
+    },
+    "value_unknown_distance_unit": {
+      "title": "BEV Insights: `{entity_id}` meldet eine unbekannte Einheit (`{unit}`)",
+      "description": "Die **{conf_key}**-Entity **{entity_id}** für **\"{title}\"** meldet ihren Wert in **`{unit}`** — BEV Insights weiß nicht, wie diese Einheit in Kilometer umgerechnet wird. Der Wert wird als Kilometer interpretiert, was fast sicher falsch ist, wenn die Entity tatsächlich Meilen, Meter oder etwas anderes verwendet. Korrigieren Sie das `unit_of_measurement`-Attribut der zuliefernden Entity, oder wählen Sie unter **Konfigurieren** eine andere Quell-Entity. Dieser Eintrag verschwindet automatisch, sobald die Einheit auf einen erkannten Wert (`km`, `mi`, `m`) wechselt."
     }
   },
   "entity": {

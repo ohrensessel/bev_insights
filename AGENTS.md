@@ -23,9 +23,11 @@ In addition to sensors, the integration ships:
 - **Diagnostics dump** (`diagnostics.py`): JSON snapshot of config,
   tracker baseline + last session, history summaries, capacity values,
   source-entity states.
-- **Repairs panel issues** (`repairs.py`): one issue per missing source
-  entity, with a Configure-pointer; clears automatically when the entity
-  is back.
+- **Repairs panel issues** (`repairs.py`): missing-entity issues plus
+  value-level sanity checks — actual-capacity helper outside 5–200 kWh,
+  SoC source outside 0–100 %, mileage going backwards by > 1 km,
+  range/mileage reporting an unrecognised distance unit. Each clears
+  automatically when the condition resolves.
 - **Recorder backfill** (`backfill.py`): on first install, primes the
   8-day SoC and mileage history deques from HA's recorder so window
   sensors become useful immediately instead of waiting a week. Also
@@ -105,7 +107,7 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 | `config_flow.py` | v2 schema, `async_step_user` + `async_step_reconfigure`. |
 | `backfill.py` | Reads the prior 8 days of source-entity states from HA's recorder on first install and primes the history deques. Also walks the charging-state entity for the most recent off → on → off cycle and seeds `ChargeTracker` with a baseline (and `last_session`) so tracker-linked sensors don't have to wait for the next live charge. Wrapped in try/except so missing/older recorder APIs are silently ignored. |
 | `diagnostics.py` | `async_get_config_entry_diagnostics` — returns redacted JSON snapshot for the Diagnostics download. |
-| `repairs.py` | Files / clears Repairs-panel issues for missing source entities; checked on setup and periodically. |
+| `repairs.py` | Files / clears Repairs-panel issues. Two layers: (1) missing source entities (re-checked on `entity_registry_updated`), (2) value-level sanity — capacity outside 5–200 kWh, SoC outside 0–100 %, mileage reversal > 1 km, unknown distance unit (re-checked on state changes of the relevant source entities). |
 
 ### `sensor/` package layout
 
@@ -305,11 +307,6 @@ or when they stop seeming useful.
   `ac` / `dc_fast` / `unknown`) thresholded around 22 kW would let
   users filter the session log and write "fast charge completed"
   automations.
-- **Repairs panel coverage beyond missing entities.** Today the panel
-  only catches a vanished source entity. Could also flag: capacity
-  helper outside plausible range (< 5 kWh / > 200 kWh), SoC source
-  reporting negative or > 100 % values, mileage going backwards, range
-  source unit mismatching HA's configured unit system.
 - **LTS-backed long-term averages.** "Average efficiency this year" /
   "Total km this month" etc. by querying HA's `statistics` table
   instead of the 8-day deque. Unlocks genuinely long-term trends

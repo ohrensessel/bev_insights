@@ -7,6 +7,24 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Broader Repairs panel coverage.** Beyond the existing missing-entity
+  detection, four new value-level issues now surface in HA's Repairs
+  panel:
+  - `value_capacity_out_of_range` — the actual-capacity helper reports
+    a value outside 5–200 kWh (catches typos like `770` instead of
+    `77`, or pointing at the wrong sensor).
+  - `value_soc_out_of_range` — the SoC source reports < 0 or > 100 %
+    (upstream-integration bug; we clamp internally so derived sensors
+    keep working, but the underlying data is wrong).
+  - `value_mileage_went_backwards` — the odometer drops by more than
+    1 km. Distance sensors clamp negative deltas to zero so they don't
+    report nonsense, but the data is wrong. Clears automatically once
+    the odometer climbs back past the previous peak.
+  - `value_unknown_distance_unit` — the range or mileage entity
+    reports a unit BEV Insights can't convert to km (`read_distance_km`
+    silently falls back to km, which produces wrong values).
+
+  All issues clear automatically when the condition resolves.
 - **Charge-baseline recorder backfill.** On first install (and on any
   reload where the baseline hasn't been captured yet),
   `async_setup_entry` walks HA's recorder for the most recent
