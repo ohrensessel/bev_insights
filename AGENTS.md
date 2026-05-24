@@ -282,3 +282,47 @@ test pre-creates a placeholder disk file (for the glob) **and** seeds
     stale anchor — `LastChargeAddedSensor` does this.
 - Don't set `_attr_last_reset` from inside a `_recalculate` that might
   bail with `unavailable` — assign it only after all guard clauses pass.
+
+## Future ideas
+
+A short list of things worth doing if there's appetite. Kept here rather
+than in a separate backlog file because (a) it's agent-visible and (b) a
+short list is easier to prune than a long one. Drop items when they ship
+or when they stop seeming useful.
+
+- **Hide-duplicates option.** Per-entry toggles to suppress the factory-
+  capacity variants and/or the km/kWh unit variants. A user who only
+  trusts the actual-capacity helper and only thinks in kWh/100 km could
+  cut the entity count from 41 to ~15. Carryover from the v0.9-era
+  backlog.
+- **DC vs AC session classification.** `AverageChargingPowerSensor`
+  already produces the signal; a cheap sibling sensor (e.g. enum:
+  `ac` / `dc_fast` / `unknown`) thresholded around 22 kW would let
+  users filter the session log and write "fast charge completed"
+  automations.
+- **Tracker-baseline recorder backfill.** v1.4.0 backfills the SoC and
+  mileage histories from HA's recorder; the `ChargeTracker` baseline
+  still requires a charge cycle to happen *after* install. Walking
+  recorder data for the most recent charging-state transition would let
+  measured-range / measured-efficiency populate on day one.
+- **Repairs panel coverage beyond missing entities.** Today the panel
+  only catches a vanished source entity. Could also flag: capacity
+  helper outside plausible range (< 5 kWh / > 200 kWh), SoC source
+  reporting negative or > 100 % values, mileage going backwards, range
+  source unit mismatching HA's configured unit system.
+- **LTS-backed long-term averages.** "Average efficiency this year" /
+  "Total km this month" etc. by querying HA's `statistics` table
+  instead of the 8-day deque. Unlocks genuinely long-term trends
+  without growing the in-memory history.
+- **Charge cost tracking.** Optional tariff input (a `sensor` exposing
+  €/kWh, or a fixed number); compute `last_charge_cost`, weekly /
+  monthly cost. Plays nicely with HA's Energy Dashboard cost columns.
+- **This-week-vs-last-week delta sensors.** "Distance driven (vs. last
+  week)" / "Energy consumed (vs. last week)" — useful for dashboards
+  that want a single up-or-down chip rather than two raw values.
+- **WLTP comparison.** Optional WLTP-rating input → exposes
+  "real-world deviation from WLTP %" as a single percentage. One number
+  that captures the gap between marketing and reality.
+- **Idle-time sensor.** Hours since the odometer last moved. Pairs with
+  the standstill-consumption sensor: "the car has sat for 72 h and lost
+  3 % SoC".
