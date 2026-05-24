@@ -9,9 +9,26 @@ from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bev_insights.backfill import async_backfill_from_recorder
-from custom_components.bev_insights.const import DOMAIN
-from custom_components.bev_insights.tracker import MileageHistory, SocHistory
+from custom_components.bev_insights.backfill import (
+    _find_last_complete_cycle,
+    _parse_distance_km,
+    _parse_soc,
+    _value_at,
+    async_backfill_from_recorder,
+    async_backfill_tracker_from_recorder,
+)
+from custom_components.bev_insights.const import (
+    BASELINE_MILEAGE_KM,
+    BASELINE_SOC_PERCENT,
+    DOMAIN,
+    SESSION_END_SOC_PERCENT,
+    SESSION_START_SOC_PERCENT,
+)
+from custom_components.bev_insights.tracker import (
+    ChargeTracker,
+    MileageHistory,
+    SocHistory,
+)
 
 # The recorder pulls in psutil_home_assistant on some HA builds, which is not
 # installed on the minimum-supported HA test matrix.  Import it optionally so
@@ -253,3 +270,349 @@ async def test_backfill_from_recorder_populates_history(hass: HomeAssistant) -> 
         hass.config.components.remove("recorder")
 
     assert history.has_data
+
+
+# --------------------------------------------------------------------------- #
+# Tracker baseline backfill — pure helpers                                    #
+# --------------------------------------------------------------------------- #
+
+
+CHARGING = "binary_sensor.car_charging"
+MILEAGE = "sensor.car_mileage"
+SOC = "sensor.car_soc"
+
+
+def test_value_at_returns_latest_at_or_before() -> None:
+    states = [
+        _state("sensor.x", "1", offset_days=5),
+        _state("sensor.x", "2", offset_days=3),
+        _state("sensor.x", "3", offset_days=1),
+    ]
+    ts = dt_util.utcnow() - timedelta(days=2)
+    result = _value_at(states, ts)
+    assert result is not None
+    assert result.state == "2"
+
+
+def test_value_at_returns_none_when_all_after_ts() -> None:
+    states = [_state("sensor.x", "1", offset_days=1)]
+    ts = dt_util.utcnow() - timedelta(days=5)
+    assert _value_at(states, ts) is None
+
+
+def test_parse_distance_km_handles_miles() -> None:
+    state = _state("sensor.odo", "100", {"unit_of_measurement": "mi"})
+    assert _parse_distance_km(state) == pytest.approx(160.9344)
+
+
+def test_parse_distance_km_returns_none_for_unavailable() -> None:
+    state = _state("sensor.odo", "unavailable")
+    assert _parse_distance_km(state) is None
+
+
+def test_parse_soc_clamps_out_of_range() -> None:
+    assert _parse_soc(_state("sensor.soc", "-5")) == 0.0
+    assert _parse_soc(_state("sensor.soc", "120")) == 100.0
+    assert _parse_soc(_state("sensor.soc", "55")) == 55.0
+
+
+def test_find_last_complete_cycle_returns_paired_edges() -> None:
+    """A clean off→on→off run reports both edges."""
+    states = [
+        _state(CHARGING, "off", offset_days=10),
+        _state(CHARGING, "on", offset_days=8),
+        _state(CHARGING, "off", offset_days=7),
+    ]
+    start_ts, end_ts = _find_last_complete_cycle(states)
+    assert start_ts is not None
+    assert end_ts is not None
+    assert start_ts < end_ts
+
+
+def test_find_last_complete_cycle_picks_latest_falling_edge() -> None:
+    """Two complete cycles → returns the most recent one."""
+    states = [
+        _state(CHARGING, "off", offset_days=10),
+        _state(CHARGING, "on", offset_days=9),
+        _state(CHARGING, "off", offset_days=8),  # first falling edge
+        _state(CHARGING, "on", offset_days=5),
+        _state(CHARGING, "off", offset_days=4),  # latest falling edge — picked
+    ]
+    start_ts, end_ts = _find_last_complete_cycle(states)
+    assert start_ts is not None
+    assert end_ts is not None
+    # End ts is roughly 4 days ago, not 8.
+    assert (dt_util.utcnow() - end_ts) < timedelta(days=5)
+
+
+def test_find_last_complete_cycle_returns_none_when_no_falling_edge() -> None:
+    states = [
+        _state(CHARGING, "off", offset_days=5),
+        _state(CHARGING, "on", offset_days=2),  # still charging at "now"
+    ]
+    start_ts, end_ts = _find_last_complete_cycle(states)
+    assert start_ts is None
+    assert end_ts is None
+
+
+def test_find_last_complete_cycle_returns_end_only_when_rising_missing() -> None:
+    """HA restart mid-charge: only the falling edge is in history."""
+    states = [
+        _state(CHARGING, "on", offset_days=5),
+        _state(CHARGING, "off", offset_days=3),
+    ]
+    start_ts, end_ts = _find_last_complete_cycle(states)
+    # Rising edge isn't observed because there's no preceding "off" sample.
+    assert start_ts is None
+    assert end_ts is not None
+
+
+# --------------------------------------------------------------------------- #
+# Tracker baseline backfill — ChargeTracker.async_backfill_baseline           #
+# --------------------------------------------------------------------------- #
+
+
+def _make_tracker(hass: HomeAssistant) -> ChargeTracker:
+    return ChargeTracker(
+        hass, _entry(), charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+
+
+async def test_tracker_baseline_backfill_sets_baseline(hass: HomeAssistant) -> None:
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+    end_ts = dt_util.utcnow() - timedelta(days=2)
+
+    accepted = await tracker.async_backfill_baseline(
+        mileage_km=15000.0, soc_percent=85.0, end_ts=end_ts
+    )
+
+    assert accepted is True
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 15000.0
+    assert tracker.baseline[BASELINE_SOC_PERCENT] == 85.0
+    assert tracker.last_session is None
+
+
+async def test_tracker_baseline_backfill_with_full_cycle_sets_session(
+    hass: HomeAssistant,
+) -> None:
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+    end_ts = dt_util.utcnow() - timedelta(days=2)
+    start_ts = end_ts - timedelta(hours=4)
+
+    await tracker.async_backfill_baseline(
+        mileage_km=15000.0,
+        soc_percent=85.0,
+        end_ts=end_ts,
+        start_soc_percent=30.0,
+        start_ts=start_ts,
+    )
+
+    assert tracker.last_session is not None
+    assert tracker.last_session[SESSION_START_SOC_PERCENT] == 30.0
+    assert tracker.last_session[SESSION_END_SOC_PERCENT] == 85.0
+    assert tracker.session_log == [tracker.last_session]
+
+
+async def test_tracker_baseline_backfill_is_noop_when_baseline_exists(
+    hass: HomeAssistant,
+) -> None:
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+    end_ts = dt_util.utcnow() - timedelta(days=2)
+
+    await tracker.async_backfill_baseline(
+        mileage_km=10000.0, soc_percent=50.0, end_ts=end_ts
+    )
+    accepted = await tracker.async_backfill_baseline(
+        mileage_km=99999.0, soc_percent=99.0, end_ts=end_ts
+    )
+
+    assert accepted is False
+    # First values preserved — the second call did nothing.
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 10000.0
+
+
+async def test_tracker_baseline_backfill_persists_across_reload(
+    hass: HomeAssistant,
+) -> None:
+    """Backfilled baseline survives a reload like a live-captured one."""
+    entry = _entry()
+    tracker_a = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker_a.async_load()
+    end_ts = dt_util.utcnow() - timedelta(days=1)
+    await tracker_a.async_backfill_baseline(
+        mileage_km=12345.6, soc_percent=72.0, end_ts=end_ts
+    )
+
+    tracker_b = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker_b.async_load()
+    assert tracker_b.baseline is not None
+    assert tracker_b.baseline[BASELINE_MILEAGE_KM] == 12345.6
+    assert tracker_b.baseline[BASELINE_SOC_PERCENT] == 72.0
+
+
+# --------------------------------------------------------------------------- #
+# async_backfill_tracker_from_recorder                                        #
+# --------------------------------------------------------------------------- #
+
+
+async def test_tracker_recorder_backfill_skips_when_recorder_absent(
+    hass: HomeAssistant,
+) -> None:
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+    assert "recorder" not in hass.config.components
+
+    await async_backfill_tracker_from_recorder(
+        hass, tracker, CHARGING, MILEAGE, SOC, days=8
+    )
+    assert tracker.baseline is None
+
+
+async def test_tracker_recorder_backfill_skips_when_baseline_exists(
+    hass: HomeAssistant,
+) -> None:
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+    await tracker.async_backfill_baseline(
+        mileage_km=1.0, soc_percent=1.0, end_ts=dt_util.utcnow()
+    )
+
+    hass.config.components.add("recorder")
+    try:
+        await async_backfill_tracker_from_recorder(
+            hass, tracker, CHARGING, MILEAGE, SOC, days=8
+        )
+    finally:
+        hass.config.components.remove("recorder")
+    # Untouched.
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 1.0
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_swallows_recorder_errors(
+    hass: HomeAssistant,
+) -> None:
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(
+        side_effect=RuntimeError("recorder boom")
+    )
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is None
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_populates_baseline_and_session(
+    hass: HomeAssistant,
+) -> None:
+    """Full integration: recorder reports a clean off→on→off; baseline + session set."""
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    # Offsets are chosen so the mileage and SoC samples bracket each
+    # charging edge by a comfortable margin — without that, microsecond
+    # differences between _state() calls make _value_at's "<= end_ts"
+    # check flaky.
+    charging_states = [
+        _state(CHARGING, "off", offset_days=9),
+        _state(CHARGING, "on", offset_days=5),
+        _state(CHARGING, "off", offset_days=2),
+    ]
+    mileage_states = [
+        _state(MILEAGE, "12000", {"unit_of_measurement": "km"}, offset_days=6),
+        _state(MILEAGE, "12500", {"unit_of_measurement": "km"}, offset_days=2.5),
+    ]
+    soc_states = [
+        _state(SOC, "30", offset_days=5.5),
+        _state(SOC, "82", offset_days=2.5),
+    ]
+
+    per_entity = {
+        CHARGING: charging_states,
+        MILEAGE: mileage_states,
+        SOC: soc_states,
+    }
+
+    async def _fake_executor_job(fn, entity_id):
+        return per_entity[entity_id]
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 12500.0
+    assert tracker.baseline[BASELINE_SOC_PERCENT] == 82.0
+    assert tracker.last_session is not None
+    assert tracker.last_session[SESSION_START_SOC_PERCENT] == 30.0
+    assert tracker.last_session[SESSION_END_SOC_PERCENT] == 82.0
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_no_falling_edge_is_noop(
+    hass: HomeAssistant,
+) -> None:
+    """Window shows only continuous charging — no baseline to backfill."""
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    charging_states = [
+        _state(CHARGING, "off", offset_days=5),
+        _state(CHARGING, "on", offset_days=2),  # still charging at "now"
+    ]
+    per_entity = {CHARGING: charging_states, MILEAGE: [], SOC: []}
+
+    async def _fake_executor_job(fn, entity_id):
+        return per_entity[entity_id]
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is None

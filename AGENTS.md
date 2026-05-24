@@ -28,7 +28,12 @@ In addition to sensors, the integration ships:
   is back.
 - **Recorder backfill** (`backfill.py`): on first install, primes the
   8-day SoC and mileage history deques from HA's recorder so window
-  sensors become useful immediately instead of waiting a week.
+  sensors become useful immediately instead of waiting a week. Also
+  walks the charging-state entity for the most recent off → on → off
+  cycle and adopts it as the `ChargeTracker` baseline (and
+  `last_session`), so measured-range / measured-efficiency / kWh-added
+  / average-power populate on day one instead of waiting for the next
+  live charge end.
 
 ## Commands
 
@@ -98,7 +103,7 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 | `util.py` | `read_float`, `read_distance_km` (unit-aware), `is_charging`. |
 | `const.py` | All constants; per-entry dispatcher signal name builders; `LEGACY_DOMAIN` and `MIN_MEASURED_RANGE_*` thresholds. |
 | `config_flow.py` | v2 schema, `async_step_user` + `async_step_reconfigure`. |
-| `backfill.py` | Reads the prior 8 days of source-entity states from HA's recorder on first install and primes the history deques. Wrapped in try/except so missing/older recorder APIs are silently ignored. |
+| `backfill.py` | Reads the prior 8 days of source-entity states from HA's recorder on first install and primes the history deques. Also walks the charging-state entity for the most recent off → on → off cycle and seeds `ChargeTracker` with a baseline (and `last_session`) so tracker-linked sensors don't have to wait for the next live charge. Wrapped in try/except so missing/older recorder APIs are silently ignored. |
 | `diagnostics.py` | `async_get_config_entry_diagnostics` — returns redacted JSON snapshot for the Diagnostics download. |
 | `repairs.py` | Files / clears Repairs-panel issues for missing source entities; checked on setup and periodically. |
 
@@ -300,11 +305,6 @@ or when they stop seeming useful.
   `ac` / `dc_fast` / `unknown`) thresholded around 22 kW would let
   users filter the session log and write "fast charge completed"
   automations.
-- **Tracker-baseline recorder backfill.** v1.4.0 backfills the SoC and
-  mileage histories from HA's recorder; the `ChargeTracker` baseline
-  still requires a charge cycle to happen *after* install. Walking
-  recorder data for the most recent charging-state transition would let
-  measured-range / measured-efficiency populate on day one.
 - **Repairs panel coverage beyond missing entities.** Today the panel
   only catches a vanished source entity. Could also flag: capacity
   helper outside plausible range (< 5 kWh / > 200 kWh), SoC source

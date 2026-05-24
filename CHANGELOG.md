@@ -6,6 +6,19 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Charge-baseline recorder backfill.** On first install (and on any
+  reload where the baseline hasn't been captured yet),
+  `async_setup_entry` walks HA's recorder for the most recent
+  charging-state off → on → off cycle and adopts it as the tracker
+  baseline. Previously, measured-range / measured-efficiency /
+  last-charge-added / average-charging-power all stayed `unavailable`
+  until the next live charge end — typically a multi-day wait. When a
+  rising edge can be paired with the falling edge, a `last_session` is
+  also synthesised so kWh-added and average-power light up too. Wrapped
+  in try/except; silently skipped when the recorder isn't loaded or
+  raises.
+
 ### Changed
 - **Rolling-7-day window sensors now produce Long-Term Statistics**.
   `energy_consumed_rolling_7_days_*`, `standstill_consumption_rolling_7_days_*`,

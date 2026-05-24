@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
-from .backfill import async_backfill_from_recorder
+from .backfill import async_backfill_from_recorder, async_backfill_tracker_from_recorder
 from .capacity import CapacitySource, EntityCapacity, FixedCapacity
 from .const import (
     CONF_CAPACITY_ACTUAL_ENTITY,
@@ -82,6 +82,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             soc_entity=entry.data[CONF_SOC_SENSOR],
         )
         await tracker.async_load()
+        # Walk recorder for a historical charge-end if no baseline exists
+        # yet, so measured-range / kWh-added populate before the next live
+        # cycle. Runs before async_start so we don't race the live edge
+        # detection, and before forward_entry_setups so the dispatcher
+        # signal isn't needed (sensors haven't subscribed yet).
+        await async_backfill_tracker_from_recorder(
+            hass,
+            tracker,
+            charging_entity=charging_entity,
+            mileage_entity=mileage_entity,
+            soc_entity=entry.data[CONF_SOC_SENSOR],
+            days=history_days,
+        )
         tracker.async_start()
 
     mileage_history: MileageHistory | None = None

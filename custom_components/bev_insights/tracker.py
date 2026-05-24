@@ -304,6 +304,56 @@ class ChargeTracker:
             payload[SESSION_LOG_KEY] = list(self._session_log)
         return payload
 
+    # ------------------------------------------------------------------ #
+    # First-install backfill                                             #
+    # ------------------------------------------------------------------ #
+
+    async def async_backfill_baseline(
+        self,
+        *,
+        mileage_km: float,
+        soc_percent: float,
+        end_ts: datetime,
+        start_soc_percent: float | None = None,
+        start_ts: datetime | None = None,
+    ) -> bool:
+        """Adopt a historical charge-end as the baseline on first install.
+
+        Idempotent: returns False (and does nothing) when a baseline is
+        already loaded. Persists immediately but does not fire the
+        dispatcher signal — this runs before the sensor platform is
+        forwarded, so there are no subscribers yet; sensors will read the
+        baseline on their first `_recalculate`.
+
+        When both `start_soc_percent` and `start_ts` are supplied, also
+        synthesises a `last_session` entry so `LastChargeAddedSensor` and
+        `AverageChargingPowerSensor` can produce a value before the next
+        live charge cycle.
+        """
+        if self._baseline is not None:
+            return False
+        self._baseline = {
+            BASELINE_MILEAGE_KM: mileage_km,
+            BASELINE_SOC_PERCENT: soc_percent,
+            BASELINE_TIMESTAMP: end_ts.isoformat(),
+        }
+        if start_soc_percent is not None and start_ts is not None:
+            self._last_session = {
+                SESSION_START_SOC_PERCENT: start_soc_percent,
+                SESSION_START_TIMESTAMP: start_ts.isoformat(),
+                SESSION_END_SOC_PERCENT: soc_percent,
+                SESSION_END_TIMESTAMP: end_ts.isoformat(),
+            }
+            self._session_log.append(self._last_session)
+        _LOGGER.info(
+            "Backfilled charge baseline from recorder: %.1f km @ %.1f%% SoC at %s",
+            mileage_km,
+            soc_percent,
+            end_ts.isoformat(),
+        )
+        await self._store.async_save(self._persisted_payload())
+        return True
+
 
 class EntityHistory:
     """Rolling window of timestamped float samples for one HA entity.
