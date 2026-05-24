@@ -9,7 +9,7 @@ A Home Assistant custom integration that consumes a small set of source
 entities (SoC, range, optional charging-state, optional odometer) and
 exposes derived EV insights (efficiency, measured range, weekly
 distance/energy, state of health, vampire-drain ratio, charge count,
-days-to-low-SoC projection, etc.) — currently **41 sensors per
+days-to-low-SoC projection, etc.) — currently **43 sensors per
 fully-wired config entry** (`tests/test_setup_smoke.py::EXPECTED_SUFFIXES`
 is the canonical list and the smoke test asserts the count).
 
@@ -120,6 +120,7 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 | `tracker_linked.py` | `MeasuredFullRangeSensor`, `MeasuredEfficiencySensor`, `LastChargedSensor`, `TimeSinceLastChargeSensor`, `SessionLogSensor`, `LastChargeAddedSensor`, `AverageChargingPowerSensor` — driven by `ChargeTracker` baselines. |
 | `distance.py` | `DistanceRolling7DaysSensor`, `DistanceThisWeekSensor`, `DaysToLowSocSensor`. |
 | `window.py` | `_WindowedSensor` base + `EnergyConsumedWindowSensor`, `StandstillConsumptionWindowSensor`, `StandstillRatioWindowSensor`, `ChargeCountWindowSensor`, `AverageEfficiencyWindowSensor`. |
+| `long_term.py` | `_LongTermDistanceSensor` base + `DistanceThisMonthSensor`, `DistanceThisYearSensor`. Read the baseline odometer at period start from HA's `statistics` table (not the 8-day deque), cache it for the period, refresh on the hourly tick. |
 
 ## Sensor pattern
 
@@ -307,10 +308,13 @@ or when they stop seeming useful.
   `ac` / `dc_fast` / `unknown`) thresholded around 22 kW would let
   users filter the session log and write "fast charge completed"
   automations.
-- **LTS-backed long-term averages.** "Average efficiency this year" /
-  "Total km this month" etc. by querying HA's `statistics` table
-  instead of the 8-day deque. Unlocks genuinely long-term trends
-  without growing the in-memory history.
+- **Average-efficiency long-term sensors.** v1.5+ ships
+  `distance_this_month` and `distance_this_year` (statistics-backed).
+  A natural extension is the same pattern for "Average efficiency this
+  month / year" — combine the monthly mileage delta with the monthly
+  energy-consumed sum (already an LTS curve via the `this_week` energy
+  sensor's TOTAL state class, just rolled up). Trickier because the
+  energy sum needs `last_reset` boundaries aligned with the period.
 - **Charge cost tracking.** Optional tariff input (a `sensor` exposing
   €/kWh, or a fixed number); compute `last_charge_cost`, weekly /
   monthly cost. Plays nicely with HA's Energy Dashboard cost columns.

@@ -282,6 +282,20 @@
           "oldest_sample_timestamp": { "name": "Oldest sample time" }
         }
       },
+      "distance_this_month": {
+        "name": "Distance driven (this month)",
+        "state_attributes": {
+          "period_start": { "name": "Month start (local 00:00 day 1)" },
+          "baseline_mileage_km": { "name": "Odometer at month start" }
+        }
+      },
+      "distance_this_year": {
+        "name": "Distance driven (this year)",
+        "state_attributes": {
+          "period_start": { "name": "Year start (local Jan 1 00:00)" },
+          "baseline_mileage_km": { "name": "Odometer at year start" }
+        }
+      },
       "energy_consumed_rolling_7_days_factory": {
         "name": "Energy consumed (rolling 7 days, factory capacity)",
         "state_attributes": {

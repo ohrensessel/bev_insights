@@ -64,6 +64,8 @@ Most need the mileage sensor; a few work with SoC alone (noted below).
 |---|---|---|
 | Distance driven (rolling 7 days) | km | yes |
 | Distance driven (this week) | km | yes |
+| Distance driven (this month) | km | yes |
+| Distance driven (this year) | km | yes |
 | Energy consumed (rolling 7 days, factory + actual capacity) | kWh | no |
 | Energy consumed (this week, factory + actual capacity) | kWh | no |
 | Average efficiency (rolling 7 days × {factory, actual} × {kWh/100 km, km/kWh}) | kWh/100 km or km/kWh | yes |
@@ -96,6 +98,13 @@ window anchor and expose `partial_window_data: true` in their attributes until e
 history has accumulated. As of v1.4.0 the integration also backfills 8 days of SoC and
 mileage samples from HA's recorder on first install, so the window sensors often light up
 immediately rather than after a week of live recording.
+
+The **monthly and yearly distance sensors** take a different route: they query HA's
+long-term `statistics` table (which is retained indefinitely, independently of the
+recorder purge window) for the odometer reading at the start of the current month / year.
+Both are `state_class=TOTAL` with `last_reset` aligned to the period start, so HA's LTS
+produces one clean sum per period. They require the upstream mileage entity to publish a
+`state_class` so HA records statistics for it; without that they stay unavailable.
 
 ## When sensors become available
 

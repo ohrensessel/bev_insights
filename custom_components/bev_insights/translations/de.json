@@ -282,6 +282,20 @@
           "oldest_sample_timestamp": { "name": "Ältester Messzeitpunkt" }
         }
       },
+      "distance_this_month": {
+        "name": "Gefahrene Strecke (dieser Monat)",
+        "state_attributes": {
+          "period_start": { "name": "Monatsbeginn (Tag 1 00:00 Ortszeit)" },
+          "baseline_mileage_km": { "name": "Kilometerstand zu Monatsbeginn" }
+        }
+      },
+      "distance_this_year": {
+        "name": "Gefahrene Strecke (dieses Jahr)",
+        "state_attributes": {
+          "period_start": { "name": "Jahresbeginn (1. Januar 00:00 Ortszeit)" },
+          "baseline_mileage_km": { "name": "Kilometerstand zu Jahresbeginn" }
+        }
+      },
       "energy_consumed_rolling_7_days_factory": {
         "name": "Energieverbrauch (gleitende 7 Tage, Werkskapazität)",
         "state_attributes": {

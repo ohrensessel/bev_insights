@@ -7,6 +7,22 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Two LTS-backed long-term distance sensors.**
+  - `distance_this_month` — kilometres driven since local midnight on
+    the first day of the current month.
+  - `distance_this_year` — kilometres driven since January 1 (local
+    time) of the current year.
+
+  Both are `state_class=TOTAL` with `last_reset` set to the period
+  start, so HA's Long-Term Statistics produces one clean sum per
+  month / year. The baseline odometer reading at period start is
+  fetched from the recorder's `statistics` table (not the 8-day
+  in-memory deque), cached for the period, and refreshed on the
+  hourly tick. Requires the upstream mileage entity to publish a
+  `state_class` so HA records statistics for it; without that the
+  sensors stay unavailable (soft failure, no error).
+
+  Entity count rises from 41 to 43.
 - **Broader Repairs panel coverage.** Beyond the existing missing-entity
   detection, four new value-level issues now surface in HA's Repairs
   panel:

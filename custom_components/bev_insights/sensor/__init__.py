@@ -56,6 +56,7 @@ from .formulas import (
     _window_cutoff,
 )
 from .instantaneous import EfficiencySensor, FullBatteryRangeSensor, StateOfHealthSensor
+from .long_term import DistanceThisMonthSensor, DistanceThisYearSensor
 from .tracker_linked import (
     AverageChargingPowerSensor,
     LastChargeAddedSensor,
@@ -194,6 +195,15 @@ async def async_setup_entry(
                 entry, mileage_history, data[CONF_MILEAGE_SENSOR]
             )
         )
+        # Monthly / yearly totals via the recorder statistics table —
+        # no in-memory history needed beyond what the odometer entity
+        # already publishes.
+        entities.append(
+            DistanceThisMonthSensor(entry, data[CONF_MILEAGE_SENSOR])
+        )
+        entities.append(
+            DistanceThisYearSensor(entry, data[CONF_MILEAGE_SENSOR])
+        )
 
     # Days-to-low-SoC estimate — needs SoC history only.
     if soc_history is not None:
@@ -294,7 +304,9 @@ __all__ = [
     "ChargeCountWindowSensor",
     "DaysToLowSocSensor",
     "DistanceRolling7DaysSensor",
+    "DistanceThisMonthSensor",
     "DistanceThisWeekSensor",
+    "DistanceThisYearSensor",
     "EfficiencySensor",
     "EnergyConsumedWindowSensor",
     "FullBatteryRangeSensor",
