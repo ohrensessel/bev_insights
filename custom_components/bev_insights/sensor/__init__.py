@@ -44,6 +44,7 @@ from .distance import (
     DaysToLowSocSensor,
     DistanceRolling7DaysSensor,
     DistanceThisWeekSensor,
+    IdleTimeSensor,
 )
 
 # Re-exported so existing imports (tests, future external use) keep
@@ -211,6 +212,8 @@ async def async_setup_entry(
                 entry, mileage_history, data[CONF_MILEAGE_SENSOR]
             )
         )
+        # Idle time — needs only the mileage history.
+        entities.append(IdleTimeSensor(entry, mileage_history))
 
     # Days-to-low-SoC estimate — needs SoC history only.
     if soc_history is not None:
@@ -332,6 +335,7 @@ __all__ = [
     "EnergyConsumedWeekDeltaSensor",
     "EnergyConsumedWindowSensor",
     "FullBatteryRangeSensor",
+    "IdleTimeSensor",
     "LastChargeAddedSensor",
     "LastChargedSensor",
     "MeasuredEfficiencySensor",

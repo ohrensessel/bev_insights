@@ -77,6 +77,7 @@ Most need the mileage sensor; a few work with SoC alone (noted below).
 | Standstill ratio (rolling 7 days, this week) | % | yes |
 | Charge count (rolling 7 days, this week) | charges | no |
 | Days to low SoC | d | no |
+| Idle time | h | yes |
 
 Energy-consumed sensors sum only **downward** SoC steps in the window, so charging events
 inside the window don't inflate the figure — the number reflects driving consumption only.
@@ -94,6 +95,13 @@ quantization noise.
 
 Days-to-low-SoC projects how many days remain until SoC reaches a configurable threshold
 (default 20 %), based on the rolling-7-day average consumption rate.
+
+The **idle-time** sensor reports hours since the odometer last changed. The mileage
+history dedupes consecutive identical samples, so the latest sample's timestamp is
+always "when the odometer last moved" even if the upstream entity keeps firing state-
+change events while parked. Useful next to the standstill-consumption sensors when you
+want to ask "how long has the car been sat, and how much SoC has it lost during that
+time?".
 
 On a fresh install the window sensors fall back to the oldest available sample as the
 window anchor and expose `partial_window_data: true` in their attributes until enough
@@ -127,7 +135,7 @@ A condensed map of what each sensor cluster needs before it stops reporting
 | **First charge end detected** (trailing edge of any charging session) | Last charged, Time since last charge |
 | **First full charge cycle completes** (off → on → off) | Last charge added (×2), Average charging power (×2) |
 | **First charge end + enough post-charge driving** (≥ 20 km / 2 % SoC, tuneable) | Measured full range, Measured efficiency (×4) |
-| **SoC / mileage history accumulates** (or is backfilled from HA's recorder on first install — v1.4.0+) | Distance driven, Energy consumed, Average efficiency, Standstill consumption + ratio, Days to low SoC |
+| **SoC / mileage history accumulates** (or is backfilled from HA's recorder on first install — v1.4.0+) | Distance driven, Energy consumed, Average efficiency, Standstill consumption + ratio, Days to low SoC, Idle time |
 
 Once a sensor has populated, going back to `unavailable` usually means a source entity
 went away (renamed, integration unloaded, restored without it). The **Repairs** panel

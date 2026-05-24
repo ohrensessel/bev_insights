@@ -461,6 +461,13 @@
           "window_days": { "name": "Averaging window (days)" }
         }
       },
+      "idle_time": {
+        "name": "Idle time",
+        "state_attributes": {
+          "last_movement_timestamp": { "name": "Last odometer change" },
+          "last_movement_mileage_km": { "name": "Odometer at last change" }
+        }
+      },
       "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
         "name": "Average efficiency (rolling 7 days, factory capacity, kWh/100 km)",
         "state_attributes": {

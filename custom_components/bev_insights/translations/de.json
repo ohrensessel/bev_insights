@@ -461,6 +461,13 @@
           "window_days": { "name": "Mittelungsfenster (Tage)" }
         }
       },
+      "idle_time": {
+        "name": "Standzeit",
+        "state_attributes": {
+          "last_movement_timestamp": { "name": "Letzte Kilometerstand-Änderung" },
+          "last_movement_mileage_km": { "name": "Kilometerstand bei letzter Änderung" }
+        }
+      },
       "avg_efficiency_rolling_7_days_factory_kwh_per_100km": {
         "name": "Durchschnittliche Effizienz (gleitende 7 Tage, Werkskapazität, kWh/100 km)",
         "state_attributes": {

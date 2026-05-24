@@ -7,6 +7,13 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`idle_time` sensor.** Hours since the odometer last changed value.
+  `MileageHistory` already dedupes consecutive identical samples, so
+  the latest sample timestamp is by construction the moment the
+  odometer *last moved* — pairs naturally with the standstill-
+  consumption sensors ("the car has sat for 72 h and lost 3 % SoC").
+  `device_class=DURATION`, `state_class=MEASUREMENT`, unit hours.
+  Entity count rises from 46 to 47.
 - **Week-over-week delta sensors.** Three new "vs. last week" chips,
   each comparing *this week so far* against *last week up to the same
   elapsed time* — so the chip is meaningful every day, not just once

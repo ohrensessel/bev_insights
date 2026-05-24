@@ -3,6 +3,7 @@
 - DistanceRolling7DaysSensor: km driven in the trailing 7 days
 - DistanceThisWeekSensor: km driven since local Monday 00:00
 - DaysToLowSocSensor: estimated days until SoC hits the configured floor
+- IdleTimeSensor: hours since the odometer last changed
 """
 from __future__ import annotations
 
@@ -285,3 +286,81 @@ class DaysToLowSocSensor(BevDerivedSensor):
             ),
             "window_days": 7,
         }
+
+
+class IdleTimeSensor(BevDerivedSensor):
+    """Hours since the odometer last changed value.
+
+        idle_hours = (now - latest_mileage_sample_ts) / 3600
+
+    `MileageHistory` deduplicates consecutive identical values, so the
+    latest sample's timestamp is always the moment the odometer *last
+    moved* — even if the upstream entity keeps firing state-change
+    events while parked. Pairs naturally with the standstill-consumption
+    sensor: "the car has sat for 72 h and lost 3 % SoC".
+
+    Unavailable when the history is still empty (no sample to anchor on).
+    """
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTime.HOURS
+    _attr_icon = "mdi:car-clock"
+    _attr_suggested_display_precision = 1
+    _attr_translation_key = "idle_time"
+
+    def __init__(
+        self, entry: ConfigEntry, mileage_history: MileageHistory
+    ) -> None:
+        # No source-entity listener: only the dispatcher signal matters
+        # (state changes that don't move the value are ignored anyway).
+        super().__init__(entry, source_entities=[])
+        self._mileage_history = mileage_history
+        self._attr_unique_id = f"{entry.entry_id}_idle_time"
+        self._attr_name = "Idle time"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _on_history_update() -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        @callback
+        def _on_tick(_now: datetime) -> None:
+            self._recalculate()
+            self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_mileage_history_updated(self._entry.entry_id),
+                _on_history_update,
+            )
+        )
+        # Hourly tick keeps the value moving forward when the car stays
+        # parked and nothing else fires.
+        self.async_on_remove(
+            async_track_time_change(self.hass, _on_tick, minute=0, second=0)
+        )
+
+    @callback
+    def _recalculate(self) -> None:
+        latest = self._mileage_history.latest_sample
+        if latest is None:
+            self._attr_available = False
+            self._attr_native_value = None
+            return
+        elapsed_h = (dt_util.utcnow() - latest[0]).total_seconds() / 3600.0
+        self._attr_available = True
+        self._attr_native_value = round(max(0.0, elapsed_h), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        latest = self._mileage_history.latest_sample
+        attrs: dict[str, Any] = {}
+        if latest is not None:
+            attrs["last_movement_timestamp"] = latest[0].isoformat()
+            attrs["last_movement_mileage_km"] = latest[1]
+        return attrs

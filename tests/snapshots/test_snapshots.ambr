@@ -318,6 +318,14 @@
       'unit_of_measurement': <UnitOfLength.KILOMETERS: 'km'>,
     }),
     dict({
+      'device_class': 'duration',
+      'entity_category': None,
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'translation_key': 'idle_time',
+      'unique_id_suffix': 'idle_time',
+      'unit_of_measurement': <UnitOfTime.HOURS: 'h'>,
+    }),
+    dict({
       'device_class': 'energy',
       'entity_category': None,
       'state_class': <SensorStateClass.TOTAL: 'total'>,

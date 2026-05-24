@@ -9,7 +9,7 @@ A Home Assistant custom integration that consumes a small set of source
 entities (SoC, range, optional charging-state, optional odometer) and
 exposes derived EV insights (efficiency, measured range, weekly
 distance/energy, state of health, vampire-drain ratio, charge count,
-days-to-low-SoC projection, etc.) — currently **46 sensors per
+days-to-low-SoC projection, etc.) — currently **47 sensors per
 fully-wired config entry** (`tests/test_setup_smoke.py::EXPECTED_SUFFIXES`
 is the canonical list and the smoke test asserts the count).
 
@@ -118,7 +118,7 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 | `formulas.py` | Pure helpers (`_efficiency_value`, `_unit_variant_props`, `_post_charge_window`, `_local_week_start`, `_window_cutoff`). |
 | `instantaneous.py` | `FullBatteryRangeSensor`, `StateOfHealthSensor`, `EfficiencySensor` — only need live source entities. |
 | `tracker_linked.py` | `MeasuredFullRangeSensor`, `MeasuredEfficiencySensor`, `LastChargedSensor`, `TimeSinceLastChargeSensor`, `SessionLogSensor`, `LastChargeAddedSensor`, `AverageChargingPowerSensor` — driven by `ChargeTracker` baselines. |
-| `distance.py` | `DistanceRolling7DaysSensor`, `DistanceThisWeekSensor`, `DaysToLowSocSensor`. |
+| `distance.py` | `DistanceRolling7DaysSensor`, `DistanceThisWeekSensor`, `DaysToLowSocSensor`, `IdleTimeSensor`. |
 | `window.py` | `_WindowedSensor` base + `EnergyConsumedWindowSensor`, `StandstillConsumptionWindowSensor`, `StandstillRatioWindowSensor`, `ChargeCountWindowSensor`, `AverageEfficiencyWindowSensor`. |
 | `long_term.py` | `_LongTermDistanceSensor` base + `DistanceThisMonthSensor`, `DistanceThisYearSensor`. Read the baseline odometer at period start from HA's `statistics` table (not the in-memory deque), cache it for the period, refresh on the hourly tick. |
 | `deltas.py` | `DistanceWeekDeltaSensor` + `EnergyConsumedWeekDeltaSensor` × {factory, actual}. Compute this-week-so-far minus last-week-up-to-same-elapsed-time using `MileageHistory.distance_between` / `SocHistory.consumed_between`. Need ≥ 14 days of history — default retention was bumped from 8 to 15 days in v1.6 to cover the worst case (Sunday evening). |
@@ -302,7 +302,7 @@ or when they stop seeming useful.
 - **Hide-duplicates option.** Per-entry toggles to suppress the factory-
   capacity variants and/or the km/kWh unit variants. A user who only
   trusts the actual-capacity helper and only thinks in kWh/100 km could
-  cut the entity count from 41 to ~15. Carryover from the v0.9-era
+  cut the entity count from 47 to ~18. Carryover from the v0.9-era
   backlog.
 - **DC vs AC session classification.** `AverageChargingPowerSensor`
   already produces the signal; a cheap sibling sensor (e.g. enum:
@@ -322,6 +322,3 @@ or when they stop seeming useful.
 - **WLTP comparison.** Optional WLTP-rating input → exposes
   "real-world deviation from WLTP %" as a single percentage. One number
   that captures the gap between marketing and reality.
-- **Idle-time sensor.** Hours since the odometer last moved. Pairs with
-  the standstill-consumption sensor: "the car has sat for 72 h and lost
-  3 % SoC".
