@@ -39,6 +39,7 @@ from custom_components.bev_insights.tracker import (
     SocHistory,
 )
 
+from .deltas import DistanceWeekDeltaSensor, EnergyConsumedWeekDeltaSensor
 from .distance import (
     DaysToLowSocSensor,
     DistanceRolling7DaysSensor,
@@ -204,6 +205,12 @@ async def async_setup_entry(
         entities.append(
             DistanceThisYearSensor(entry, data[CONF_MILEAGE_SENSOR])
         )
+        # Week-over-week distance delta — uses the same odometer entity.
+        entities.append(
+            DistanceWeekDeltaSensor(
+                entry, mileage_history, data[CONF_MILEAGE_SENSOR]
+            )
+        )
 
     # Days-to-low-SoC estimate — needs SoC history only.
     if soc_history is not None:
@@ -238,6 +245,19 @@ async def async_setup_entry(
                         window_label=window_label,
                     )
                 )
+        # Week-over-week energy delta — one per capacity variant.
+        for capacity, capacity_variant in (
+            (capacity_factory, VARIANT_FACTORY),
+            (capacity_actual, VARIANT_ACTUAL),
+        ):
+            entities.append(
+                EnergyConsumedWeekDeltaSensor(
+                    entry,
+                    soc_history,
+                    capacity=capacity,
+                    capacity_variant=capacity_variant,
+                )
+            )
 
     # Standstill (vampire drain) window sensors — needs both histories.
     if soc_history is not None and mileage_history is not None:
@@ -307,7 +327,9 @@ __all__ = [
     "DistanceThisMonthSensor",
     "DistanceThisWeekSensor",
     "DistanceThisYearSensor",
+    "DistanceWeekDeltaSensor",
     "EfficiencySensor",
+    "EnergyConsumedWeekDeltaSensor",
     "EnergyConsumedWindowSensor",
     "FullBatteryRangeSensor",
     "LastChargeAddedSensor",

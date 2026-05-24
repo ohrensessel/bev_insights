@@ -158,7 +158,11 @@ async def test_duplicate_value_is_skipped(hass: HomeAssistant) -> None:
 
 
 async def test_prune_drops_samples_past_max_age(hass: HomeAssistant) -> None:
-    history = MileageHistory(hass, _entry(), mileage_entity="sensor.odo")
+    # Pin max_age explicitly so the test doesn't drift when the default
+    # retention changes (e.g. 8 → 15 days in v1.6).
+    history = MileageHistory(
+        hass, _entry(), mileage_entity="sensor.odo", max_age_days=8
+    )
     now = dt_util.utcnow()
     history._samples.extend(
         [

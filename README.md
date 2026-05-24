@@ -66,8 +66,10 @@ Most need the mileage sensor; a few work with SoC alone (noted below).
 | Distance driven (this week) | km | yes |
 | Distance driven (this month) | km | yes |
 | Distance driven (this year) | km | yes |
+| Distance driven (vs. last week) | km | yes |
 | Energy consumed (rolling 7 days, factory + actual capacity) | kWh | no |
 | Energy consumed (this week, factory + actual capacity) | kWh | no |
+| Energy consumed (vs. last week, factory + actual capacity) | kWh | no |
 | Average efficiency (rolling 7 days × {factory, actual} × {kWh/100 km, km/kWh}) | kWh/100 km or km/kWh | yes |
 | Average efficiency (this week × {factory, actual} × {kWh/100 km, km/kWh}) | kWh/100 km or km/kWh | yes |
 | Standstill consumption (rolling 7 days, factory + actual capacity) | kWh | yes |
@@ -105,6 +107,14 @@ recorder purge window) for the odometer reading at the start of the current mont
 Both are `state_class=TOTAL` with `last_reset` aligned to the period start, so HA's LTS
 produces one clean sum per period. They require the upstream mileage entity to publish a
 `state_class` so HA records statistics for it; without that they stay unavailable.
+
+The **vs. last week** chips (distance and energy) compare *this week so far* against
+*last week up to the same elapsed time* — Wednesday 14:30 this week is compared to
+Wednesday 14:30 last week. Positive values mean "more than last week at the same point",
+negative means "less". The history retention default was bumped to 15 days in v1.6 so
+last week's start sample is always inside the deque; users who shortened `history_days`
+below 15 see `partial_window_data: true` and may get inaccurate comparisons later in
+the week.
 
 ## When sensors become available
 

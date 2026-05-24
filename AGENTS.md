@@ -9,7 +9,7 @@ A Home Assistant custom integration that consumes a small set of source
 entities (SoC, range, optional charging-state, optional odometer) and
 exposes derived EV insights (efficiency, measured range, weekly
 distance/energy, state of health, vampire-drain ratio, charge count,
-days-to-low-SoC projection, etc.) — currently **43 sensors per
+days-to-low-SoC projection, etc.) — currently **46 sensors per
 fully-wired config entry** (`tests/test_setup_smoke.py::EXPECTED_SUFFIXES`
 is the canonical list and the smoke test asserts the count).
 
@@ -120,7 +120,8 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 | `tracker_linked.py` | `MeasuredFullRangeSensor`, `MeasuredEfficiencySensor`, `LastChargedSensor`, `TimeSinceLastChargeSensor`, `SessionLogSensor`, `LastChargeAddedSensor`, `AverageChargingPowerSensor` — driven by `ChargeTracker` baselines. |
 | `distance.py` | `DistanceRolling7DaysSensor`, `DistanceThisWeekSensor`, `DaysToLowSocSensor`. |
 | `window.py` | `_WindowedSensor` base + `EnergyConsumedWindowSensor`, `StandstillConsumptionWindowSensor`, `StandstillRatioWindowSensor`, `ChargeCountWindowSensor`, `AverageEfficiencyWindowSensor`. |
-| `long_term.py` | `_LongTermDistanceSensor` base + `DistanceThisMonthSensor`, `DistanceThisYearSensor`. Read the baseline odometer at period start from HA's `statistics` table (not the 8-day deque), cache it for the period, refresh on the hourly tick. |
+| `long_term.py` | `_LongTermDistanceSensor` base + `DistanceThisMonthSensor`, `DistanceThisYearSensor`. Read the baseline odometer at period start from HA's `statistics` table (not the in-memory deque), cache it for the period, refresh on the hourly tick. |
+| `deltas.py` | `DistanceWeekDeltaSensor` + `EnergyConsumedWeekDeltaSensor` × {factory, actual}. Compute this-week-so-far minus last-week-up-to-same-elapsed-time using `MileageHistory.distance_between` / `SocHistory.consumed_between`. Need ≥ 14 days of history — default retention was bumped from 8 to 15 days in v1.6 to cover the worst case (Sunday evening). |
 
 ## Sensor pattern
 
@@ -318,9 +319,6 @@ or when they stop seeming useful.
 - **Charge cost tracking.** Optional tariff input (a `sensor` exposing
   €/kWh, or a fixed number); compute `last_charge_cost`, weekly /
   monthly cost. Plays nicely with HA's Energy Dashboard cost columns.
-- **This-week-vs-last-week delta sensors.** "Distance driven (vs. last
-  week)" / "Energy consumed (vs. last week)" — useful for dashboards
-  that want a single up-or-down chip rather than two raw values.
 - **WLTP comparison.** Optional WLTP-rating input → exposes
   "real-world deviation from WLTP %" as a single percentage. One number
   that captures the gap between marketing and reality.

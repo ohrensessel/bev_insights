@@ -222,6 +222,14 @@
       'unit_of_measurement': <UnitOfLength.KILOMETERS: 'km'>,
     }),
     dict({
+      'device_class': 'distance',
+      'entity_category': None,
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'translation_key': 'distance_week_delta',
+      'unique_id_suffix': 'distance_week_delta',
+      'unit_of_measurement': <UnitOfLength.KILOMETERS: 'km'>,
+    }),
+    dict({
       'device_class': None,
       'entity_category': None,
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
@@ -283,6 +291,22 @@
       'state_class': <SensorStateClass.TOTAL: 'total'>,
       'translation_key': 'energy_consumed_this_week_factory',
       'unique_id_suffix': 'energy_consumed_this_week_factory',
+      'unit_of_measurement': <UnitOfEnergy.KILO_WATT_HOUR: 'kWh'>,
+    }),
+    dict({
+      'device_class': None,
+      'entity_category': None,
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'translation_key': 'energy_consumed_week_delta_actual',
+      'unique_id_suffix': 'energy_consumed_week_delta_actual',
+      'unit_of_measurement': <UnitOfEnergy.KILO_WATT_HOUR: 'kWh'>,
+    }),
+    dict({
+      'device_class': None,
+      'entity_category': None,
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'translation_key': 'energy_consumed_week_delta_factory',
+      'unique_id_suffix': 'energy_consumed_week_delta_factory',
       'unit_of_measurement': <UnitOfEnergy.KILO_WATT_HOUR: 'kWh'>,
     }),
     dict({

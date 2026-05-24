@@ -296,6 +296,43 @@
           "baseline_mileage_km": { "name": "Kilometerstand zu Jahresbeginn" }
         }
       },
+      "distance_week_delta": {
+        "name": "Gefahrene Strecke (vs. Vorwoche)",
+        "state_attributes": {
+          "this_week_start": { "name": "Beginn dieser Woche" },
+          "last_week_start": { "name": "Beginn letzter Woche" },
+          "last_week_equivalent_end": { "name": "Vergleichszeitpunkt letzter Woche" },
+          "partial_window_data": { "name": "Teildaten" },
+          "this_week_distance_km": { "name": "Diese Woche bisher" },
+          "last_week_distance_km": { "name": "Letzte Woche bis zum gleichen Zeitpunkt" }
+        }
+      },
+      "energy_consumed_week_delta_factory": {
+        "name": "Energieverbrauch (vs. Vorwoche, Werkskapazität)",
+        "state_attributes": {
+          "this_week_start": { "name": "Beginn dieser Woche" },
+          "last_week_start": { "name": "Beginn letzter Woche" },
+          "last_week_equivalent_end": { "name": "Vergleichszeitpunkt letzter Woche" },
+          "partial_window_data": { "name": "Teildaten" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "this_week_soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
+          "last_week_soc_consumed_percent": { "name": "SoC-Verbrauch letzte Woche (bis gleicher Zeitpunkt)" }
+        }
+      },
+      "energy_consumed_week_delta_actual": {
+        "name": "Energieverbrauch (vs. Vorwoche, tatsächliche Kapazität)",
+        "state_attributes": {
+          "this_week_start": { "name": "Beginn dieser Woche" },
+          "last_week_start": { "name": "Beginn letzter Woche" },
+          "last_week_equivalent_end": { "name": "Vergleichszeitpunkt letzter Woche" },
+          "partial_window_data": { "name": "Teildaten" },
+          "capacity_kwh": { "name": "Kapazität" },
+          "capacity_source": { "name": "Kapazitätsquelle" },
+          "this_week_soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
+          "last_week_soc_consumed_percent": { "name": "SoC-Verbrauch letzte Woche (bis gleicher Zeitpunkt)" }
+        }
+      },
       "energy_consumed_rolling_7_days_factory": {
         "name": "Energieverbrauch (gleitende 7 Tage, Werkskapazität)",
         "state_attributes": {

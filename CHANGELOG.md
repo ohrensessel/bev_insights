@@ -7,6 +7,21 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Week-over-week delta sensors.** Three new "vs. last week" chips,
+  each comparing *this week so far* against *last week up to the same
+  elapsed time* — so the chip is meaningful every day, not just once
+  the week is locked in:
+  - `distance_week_delta` — Δkm (positive = drove more this week).
+  - `energy_consumed_week_delta_factory` and `_actual` — ΔkWh per
+    capacity variant. No `device_class=ENERGY` since the value can be
+    negative and HA only allows TOTAL / TOTAL_INCREASING there;
+    `state_class=MEASUREMENT` with `kWh` unit so LTS still records
+    min/max/mean curves.
+
+  Default SoC / mileage retention bumped from 8 → 15 days so the
+  comparison always has last week's start sample regardless of when in
+  the week it's read. Users who explicitly set `history_days` in
+  options keep their value. Entity count rises from 43 to 46.
 - **Two LTS-backed long-term distance sensors.**
   - `distance_this_month` — kilometres driven since local midnight on
     the first day of the current month.

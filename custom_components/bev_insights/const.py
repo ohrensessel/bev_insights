@@ -77,10 +77,13 @@ STORAGE_KEY_PREFIX = f"{DOMAIN}.charge_tracker"
 MILEAGE_HISTORY_KEY_PREFIX = f"{DOMAIN}.mileage_history"
 SOC_HISTORY_KEY_PREFIX = f"{DOMAIN}.soc_history"
 
-# How many days of samples to retain (a bit more than a week so the
-# rolling 7-day window always has data on both sides of the cutoff).
-MILEAGE_HISTORY_DAYS = 8
-SOC_HISTORY_DAYS = 8
+# How many days of samples to retain. 15 days covers two full calendar
+# weeks so the week-over-week delta sensors always have last week's
+# start sample regardless of the day. Older releases used 8 (just past
+# the rolling-7-day window); existing users who explicitly set
+# `history_days` in options keep their value.
+MILEAGE_HISTORY_DAYS = 15
+SOC_HISTORY_DAYS = 15
 
 # Dispatcher signal sent when a charge-end event updates the baseline.
 # Format the per-entry signal name with `signal_baseline_updated(entry_id)`.

@@ -606,6 +606,25 @@ class MileageHistory(EntityHistory):
     def distance_since(self, cutoff: datetime) -> float | None:
         return self.delta_since(cutoff)
 
+    def distance_between(
+        self, start: datetime, end: datetime
+    ) -> float | None:
+        """Return km driven between `start` and `end`, or None if no data.
+
+        Uses `value_at` for both endpoints (most recent sample at or
+        before each ts). Clamps negatives to 0 the same way
+        `distance_since` does. Returns None when either endpoint has no
+        sample to anchor on — caller can then surface
+        `partial_window_data` in attributes.
+        """
+        if not self._samples:
+            return None
+        start_value = self.value_at(start)
+        end_value = self.value_at(end)
+        if start_value is None or end_value is None:
+            return None
+        return max(0.0, end_value - start_value)
+
     def _postprocess_delta(self, raw_delta: float) -> float:
         return max(0.0, raw_delta)
 
@@ -660,6 +679,22 @@ class SocHistory(EntityHistory):
         except (TypeError, ValueError):
             return None
         return min(max(value, 0.0), 100.0)
+
+    def consumed_between(
+        self, start: datetime, end: datetime
+    ) -> float | None:
+        """Return total SoC consumed (percent) in `[start, end)`, or None.
+
+        Identity: `consumed_in_[start, end] = consumed_since(start) -
+        consumed_since(end)` — both sums walk to the last sample, so
+        subtracting cancels the tail. Returns None when either side is
+        None (no usable samples on either anchor).
+        """
+        full = self.consumed_since(start)
+        tail = self.consumed_since(end)
+        if full is None or tail is None:
+            return None
+        return max(0.0, full - tail)
 
     def consumed_since(self, cutoff: datetime) -> float | None:
         """Return total SoC consumed (percent) since `cutoff`, or None.
