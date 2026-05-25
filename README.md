@@ -13,7 +13,7 @@
 
 # BEV Insights
 
-A Home Assistant custom integration that derives **up to 41 additional sensors** for a
+A Home Assistant custom integration that derives **up to 47 additional sensors** for a
 battery-electric vehicle from a small set of source entities: battery percentage (SoC),
 remaining range, an optional charging-state indicator, and an optional odometer reading.
 
@@ -57,8 +57,12 @@ dominated by SoC quantization noise.
 
 ### Window sensors
 
-Two windows: **rolling 7 days** (trailing 168 h) and **this calendar week** (local Monday 00:00).
-Most need the mileage sensor; a few work with SoC alone (noted below).
+Historical aggregates over five periods: **rolling 7 days** (trailing 168 h), **this
+calendar week** (local Monday 00:00), **this month** (local 1st 00:00), **this year**
+(local Jan 1 00:00), and a **vs. last week** delta chip. The 7-day and calendar-week
+variants come from an in-memory deque of source-entity samples; the monthly / yearly
+variants query HA's long-term `statistics` table directly. Most need the mileage sensor;
+a few work with SoC alone (noted below).
 
 | Entity | Unit | Needs mileage? |
 |---|---|---|
@@ -105,9 +109,20 @@ time?".
 
 On a fresh install the window sensors fall back to the oldest available sample as the
 window anchor and expose `partial_window_data: true` in their attributes until enough
-history has accumulated. As of v1.4.0 the integration also backfills 8 days of SoC and
-mileage samples from HA's recorder on first install, so the window sensors often light up
-immediately rather than after a week of live recording.
+history has accumulated. Two backfills run on first setup to shorten that wait:
+
+- **History backfill (v1.4.0+):** the integration walks HA's recorder for the prior
+  `history_days` (default 15) of SoC and mileage state changes and primes the deques,
+  so the window sensors typically light up immediately rather than after a week of
+  live recording.
+- **Tracker-baseline backfill (v1.6.0+):** the integration also walks the
+  charging-state entity for the most recent off → on → off cycle and adopts it as the
+  `ChargeTracker` baseline (and `last_session`), so measured range / measured
+  efficiency / last-charge-added / average charging power populate on day one instead
+  of waiting for the next live charge end.
+
+Both backfills are best-effort and silently no-op if the recorder isn't available or
+the queried entity has no history.
 
 The **monthly and yearly distance sensors** take a different route: they query HA's
 long-term `statistics` table (which is retained indefinitely, independently of the
@@ -119,10 +134,9 @@ produces one clean sum per period. They require the upstream mileage entity to p
 The **vs. last week** chips (distance and energy) compare *this week so far* against
 *last week up to the same elapsed time* — Wednesday 14:30 this week is compared to
 Wednesday 14:30 last week. Positive values mean "more than last week at the same point",
-negative means "less". The history retention default was bumped to 15 days in v1.6 so
-last week's start sample is always inside the deque; users who shortened `history_days`
-below 15 see `partial_window_data: true` and may get inaccurate comparisons later in
-the week.
+negative means "less". The default `history_days` is 15 so last week's start sample is
+always inside the deque; users who set `history_days` below 15 see `partial_window_data:
+true` and may get inaccurate comparisons later in the week.
 
 ## When sensors become available
 
@@ -139,7 +153,15 @@ A condensed map of what each sensor cluster needs before it stops reporting
 
 Once a sensor has populated, going back to `unavailable` usually means a source entity
 went away (renamed, integration unloaded, restored without it). The **Repairs** panel
-will surface a fix-it card pointing at the missing entity (v1.5.0+).
+surfaces fix-it cards for two classes of problem:
+
+- **Missing source entity** (v1.5.0+) — a configured SoC, range, charging, mileage or
+  capacity entity is no longer registered with HA.
+- **Value-level sanity issues** (v1.6.0+) — actual-capacity helper outside the
+  plausible 5–200 kWh range, SoC source outside 0–100 %, mileage going backwards by
+  more than 1 km, or a range / mileage entity reporting an unrecognised distance unit.
+
+All issues clear automatically as soon as the underlying condition resolves.
 
 ## Installation
 
@@ -210,7 +232,7 @@ Open the integration card and click **Configure** to access the options form:
 |---|---|---|
 | Minimum distance after charging | 20 km | Measured range / efficiency sensors stay unavailable until at least this much distance has been driven since the last charge end. |
 | Minimum SoC consumed after charging | 2 % | And until at least this much SoC has been consumed. Both floors apply — they trade off against each other. |
-| History retention window | 8 days | How many days of SoC and odometer samples to retain. Going below 7 leaves the rolling-7-day sensors permanently in `partial_window_data: true` mode. |
+| History retention window | 15 days | How many days of SoC and odometer samples to retain. The rolling-7-day sensors need at least 7 days; the **vs. last week** chips need at least 14. Going below 7 leaves the rolling-7-day sensors permanently in `partial_window_data: true` mode; going below 15 has the same effect on the vs-last-week sensors later in the week. |
 
 Defaults are good for typical use; the floors filter out post-charge noise dominated by SoC quantization (~1% on most BEVs).
 
@@ -233,7 +255,7 @@ from a dashboard slider or an automation without reconfiguring the integration.
 
 v1.0 renames the integration to a generic `bev_insights` domain. Existing installs need to
 re-create the config entry under the new domain, but the persisted state (charge baseline,
-last session, 8 days of SoC and mileage history) is migrated automatically on first setup
+last session, rolling SoC and mileage histories) is migrated automatically on first setup
 of the new domain:
 
 1. Update the integration files (HACS pulls the new version, manual installers copy the
@@ -264,12 +286,20 @@ reference back in v0.7. When upgrading from a v1 config entry:
 - All derived sensors share the `BevDerivedSensor` base class and recompute on
   `async_track_state_change_event` for their source entities.
 - The `ChargeTracker` captures `(odometer, SoC, timestamp)` on the trailing edge of
-  charging sessions and persists them via `homeassistant.helpers.storage.Store`.
-- `MileageHistory` and `SocHistory` maintain rolling 8-day deques of samples, also
-  persisted via `Store`, used by all window sensors.
+  charging sessions and persists them via `homeassistant.helpers.storage.Store`. On
+  first install it walks the recorder for the most recent off → on → off cycle and
+  adopts that as the baseline (and `last_session`) so the tracker-linked sensors don't
+  have to wait for the next live charge.
+- `MileageHistory` and `SocHistory` maintain rolling deques of samples
+  (`history_days` default = 15), persisted via `Store` with debounced writes (10 s
+  window) to keep disk churn down. On first install they're primed from HA's recorder
+  so the window sensors typically light up immediately.
 - The `CapacitySource` abstraction (`FixedCapacity` / `EntityCapacity`) allows sensors
   to call `.current()` per recalculation. `EntityCapacity` sensors additionally subscribe
   to their source entity's state changes so they recompute the instant the helper moves.
+- Monthly / yearly distance sensors are statistics-backed: they query HA's long-term
+  `statistics` table for the odometer reading at the start of the current period rather
+  than retaining months of samples in memory.
 
 ## Reporting issues
 
