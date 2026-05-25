@@ -1,6 +1,7 @@
 """Tests for the `ChargeTracker` class."""
 from __future__ import annotations
 
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -405,6 +406,113 @@ async def test_async_stop_without_start_is_noop(hass: HomeAssistant) -> None:
     await tracker.async_load()
     await tracker.async_stop()  # _unsub is None — should be a silent no-op.
     assert tracker.baseline is None
+
+
+# --------------------------------------------------------------------------- #
+# Mid-session source unavailability: full cycle                               #
+# --------------------------------------------------------------------------- #
+#
+# The car briefly drops off the network (cell radio asleep, MQTT bridge
+# restarting, etc.) while charging is active. We exercise the full off→on
+# →unavailable→off cycle to confirm:
+#
+#   1. The pending-start is captured fine at the rising edge.
+#   2. When the falling edge arrives with mileage unavailable, `_capture_baseline`
+#      bails — no baseline write, no last_session, and crucially no exception.
+#   3. `_pending_start` is preserved across the failed capture so it doesn't
+#      "ghost" into the next session — the next rising edge overwrites it.
+#   4. Once the source comes back, a follow-up cycle produces a clean
+#      baseline + last_session with the *new* start SoC, not the stale one.
+
+
+async def test_mileage_unavailable_mid_session_aborts_baseline_capture(
+    hass: HomeAssistant,
+) -> None:
+    """Mileage drops out between rising and falling edges; baseline must not update."""
+    hass.states.async_set(MILEAGE, "10000")
+    hass.states.async_set(SOC, "40")
+    hass.states.async_set(CHARGING, "off")
+    tracker = await _make_tracker(hass)
+    await hass.async_block_till_done()
+    assert tracker.baseline is None
+
+    # Rising edge — start SoC captured normally.
+    hass.states.async_set(CHARGING, "on")
+    await hass.async_block_till_done()
+    assert tracker._pending_start is not None
+    assert tracker._pending_start[SESSION_START_SOC_PERCENT] == 40.0
+    pending_at_start = dict(tracker._pending_start)
+
+    # Mid-session: mileage entity goes unavailable, SoC keeps climbing.
+    hass.states.async_set(MILEAGE, STATE_UNAVAILABLE)
+    hass.states.async_set(SOC, "85")
+    await hass.async_block_till_done()
+
+    # Falling edge while mileage is still unavailable.
+    hass.states.async_set(CHARGING, "off")
+    await hass.async_block_till_done()
+
+    # Capture bailed: no baseline, no last_session.
+    assert tracker.baseline is None
+    assert tracker.last_session is None
+    # Pending start is preserved because `_capture_baseline` short-circuited
+    # before reaching the line that clears it. The next rising edge will
+    # overwrite it (verified in the follow-up cycle below).
+    assert tracker._pending_start == pending_at_start
+    await tracker.async_stop()
+
+
+async def test_mileage_recovers_after_unavailable_session_then_new_cycle_succeeds(
+    hass: HomeAssistant,
+) -> None:
+    """After the source recovers, a fresh cycle must produce a clean session.
+
+    The key correctness property: the *new* start SoC must be the one in
+    `last_session`, not the stale pending-start from the dropped cycle.
+    """
+    hass.states.async_set(MILEAGE, "20000")
+    hass.states.async_set(SOC, "40")
+    hass.states.async_set(CHARGING, "off")
+    tracker = await _make_tracker(hass)
+    await hass.async_block_till_done()
+
+    # Cycle 1: rising edge captured, mileage drops, falling edge bails.
+    hass.states.async_set(CHARGING, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(MILEAGE, STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING, "off")
+    await hass.async_block_till_done()
+    assert tracker.baseline is None
+    assert tracker.last_session is None
+    # Stale pending_start with SoC=40 is still hanging around.
+    assert tracker._pending_start is not None
+    assert tracker._pending_start[SESSION_START_SOC_PERCENT] == 40.0
+
+    # Source recovers with a new mileage value.
+    hass.states.async_set(MILEAGE, "20015.5")
+    await hass.async_block_till_done()
+
+    # Cycle 2: full off→on→off with everything available.
+    hass.states.async_set(SOC, "55")  # different start SoC than the dropped cycle.
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(SOC, "92")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING, "off")
+    await hass.async_block_till_done()
+
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 20015.5
+    assert tracker.baseline[BASELINE_SOC_PERCENT] == 92.0
+    assert tracker.last_session is not None
+    # Start SoC must be 55 (the new cycle), NOT 40 (the leaked stale one).
+    assert tracker.last_session[SESSION_START_SOC_PERCENT] == 55.0
+    assert tracker.last_session[SESSION_END_SOC_PERCENT] == 92.0
+    # The stale pending_start has been consumed and cleared.
+    assert tracker._pending_start is None
+    await tracker.async_stop()
 
 
 async def test_baseline_persists_across_reloads(hass: HomeAssistant) -> None:
