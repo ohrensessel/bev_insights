@@ -63,3 +63,89 @@ async def test_local_week_start_is_at_most_seven_days_back(
     now_utc = datetime(2026, 5, 13, 12, 0, tzinfo=UTC)
     result = _local_week_start(now_utc, hass)
     assert timedelta(0) <= now_utc - result < timedelta(days=7)
+
+
+# --------------------------------------------------------------------------- #
+# DST transitions                                                             #
+# --------------------------------------------------------------------------- #
+#
+# A naive implementation that decomposed the local datetime and rebuilt it as
+# `datetime(..., tzinfo=local_tz)` would silently lose the DST offset that was
+# in effect at Monday 00:00 of the week. We assert against UTC ISO strings so
+# any such off-by-one-hour bug is visible.
+
+
+async def test_local_week_start_on_spring_forward_sunday(
+    hass: HomeAssistant,
+) -> None:
+    """Spring-forward Sunday in Europe/Berlin: Sun 2026-03-29.
+
+    At 01:59 local the clocks jump to 03:00 (CET → CEST). The week's Monday
+    (2026-03-23) is firmly in CET (UTC+1), so Monday 00:00 local = Sunday
+    2026-03-22 23:00 UTC — regardless of where on the changeover Sunday we
+    sample from.
+    """
+    hass.config.time_zone = "Europe/Berlin"
+    expected = "2026-03-22T23:00:00+00:00"
+    # Before, during, and after the DST jump (which happens at 01:00 UTC).
+    # Stay below 22:00 UTC on changeover Sunday — past that, local time has
+    # already rolled into Monday (the next week).
+    for now_utc in (
+        datetime(2026, 3, 29, 0, 30, tzinfo=UTC),  # 01:30 local CET
+        datetime(2026, 3, 29, 1, 30, tzinfo=UTC),  # 03:30 local CEST
+        datetime(2026, 3, 29, 12, 0, tzinfo=UTC),  # 14:00 local CEST
+        datetime(2026, 3, 29, 21, 30, tzinfo=UTC),  # 23:30 local CEST
+    ):
+        result = _local_week_start(now_utc, hass)
+        assert result.isoformat() == expected, (
+            f"DST spring-forward bug at {now_utc.isoformat()}: got {result.isoformat()}"
+        )
+
+
+async def test_local_week_start_on_fall_back_sunday(
+    hass: HomeAssistant,
+) -> None:
+    """Fall-back Sunday in Europe/Berlin: Sun 2026-10-25.
+
+    Clocks shift 03:00 → 02:00 local (CEST → CET). The week's Monday
+    (2026-10-19) is in CEST (UTC+2), so Monday 00:00 local = Sunday
+    2026-10-18 22:00 UTC — even though `now_utc` sits in CET territory by
+    the end of the day.
+    """
+    hass.config.time_zone = "Europe/Berlin"
+    expected = "2026-10-18T22:00:00+00:00"
+    for now_utc in (
+        datetime(2026, 10, 25, 0, 30, tzinfo=UTC),  # 02:30 local CEST
+        datetime(2026, 10, 25, 1, 30, tzinfo=UTC),  # 02:30 local CET (ambiguous hr)
+        datetime(2026, 10, 25, 12, 0, tzinfo=UTC),  # 13:00 local CET
+        datetime(2026, 10, 25, 22, 30, tzinfo=UTC),  # 23:30 local CET
+    ):
+        result = _local_week_start(now_utc, hass)
+        assert result.isoformat() == expected, (
+            f"DST fall-back bug at {now_utc.isoformat()}: got {result.isoformat()}"
+        )
+
+
+async def test_local_week_start_when_monday_itself_is_dst_changeover(
+    hass: HomeAssistant,
+) -> None:
+    """A week whose Monday-00:00 local sits across a DST boundary.
+
+    For a tz where DST starts on a Monday at 00:00 local (rare but legal),
+    `_local_week_start` should still anchor on the local-midnight Monday.
+    Using Europe/London where 2026-03-29 is a Sunday and DST starts at
+    01:00 UTC: by Tuesday 12:00 UTC we're well in BST (UTC+1). Monday
+    2026-03-23 00:00 local was still GMT (UTC+0) → 2026-03-23 00:00 UTC.
+    """
+    hass.config.time_zone = "Europe/London"
+    now_utc = datetime(2026, 3, 24, 12, 0, tzinfo=UTC)  # Tuesday post-DST? no, pre.
+    # 2026-03-24 is Tuesday and still BEFORE the Sunday changeover, so
+    # London is on GMT (UTC+0). Monday 00:00 local = Monday 00:00 UTC.
+    result = _local_week_start(now_utc, hass)
+    assert result.isoformat() == "2026-03-23T00:00:00+00:00"
+
+    # And one week later (Tue after DST) the same week-start logic in BST.
+    now_utc = datetime(2026, 3, 31, 12, 0, tzinfo=UTC)
+    # Monday 2026-03-30 00:00 local is BST (UTC+1) = Sunday 2026-03-29 23:00 UTC.
+    result = _local_week_start(now_utc, hass)
+    assert result.isoformat() == "2026-03-29T23:00:00+00:00"
