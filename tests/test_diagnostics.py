@@ -148,3 +148,126 @@ async def test_diagnostics_runs_when_tracker_absent(hass: HomeAssistant) -> None
     }
     assert diag["histories"]["mileage"] is None
     assert diag["histories"]["soc"]["sample_count"] >= 1
+
+
+# --------------------------------------------------------------------------- #
+# Sensor attribute redaction: unique_id must never leak via attributes        #
+# --------------------------------------------------------------------------- #
+#
+# `unique_id` is in the diagnostics TO_REDACT set because it concatenates
+# source entity_ids that may embed VIN, license plate, or other identifying
+# detail. The redaction guards the diagnostics dump — but the same identifier
+# could just as well leak via a sensor's `extra_state_attributes`, which is
+# fully visible in the HA UI and the REST API. This test enumerates every
+# sensor the integration creates and asserts that none of their attributes
+# contain the entry's unique_id (or any individual sensor's unique_id) as a
+# substring, recursively through nested dicts/lists.
+
+
+def _contains_string(value: object, needle: str) -> bool:
+    """Recursive substring check across nested dicts/lists/tuples."""
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, dict):
+        return any(
+            _contains_string(k, needle) or _contains_string(v, needle)
+            for k, v in value.items()
+        )
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return any(_contains_string(item, needle) for item in value)
+    return False
+
+
+async def test_sensor_attributes_do_not_leak_unique_id(
+    hass: HomeAssistant,
+) -> None:
+    """No `extra_state_attributes` value should embed the entry or sensor unique_id.
+
+    Drives the integration through a full charge cycle so attribute dicts
+    that only populate after a baseline exists (e.g. measured-range
+    sensors) are exercised, not just the cold-start no-data path.
+    """
+    entry = await _setup(hass)
+    # Run a complete cycle so tracker-linked sensors have data to attribute.
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(SOC_ENTITY, "80")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    sensors = [
+        ent for ent in registry.entities.values()
+        if ent.config_entry_id == entry.entry_id
+    ]
+    assert sensors, "Setup didn't register any entities — test misconfigured."
+
+    entry_unique_id = entry.unique_id
+    assert entry_unique_id, "Test entry must have a unique_id set."
+
+    needles = {entry_unique_id, *(ent.unique_id for ent in sensors if ent.unique_id)}
+
+    leaks: list[tuple[str, str, object]] = []
+    for ent in sensors:
+        state = hass.states.get(ent.entity_id)
+        if state is None:
+            continue
+        for needle in needles:
+            if _contains_string(dict(state.attributes), needle):
+                leaks.append((ent.entity_id, needle, dict(state.attributes)))
+
+    assert not leaks, (
+        "Sensor attributes leak unique_id values:\n"
+        + "\n".join(
+            f"  {entity_id}: contains {needle!r} in {attrs!r}"
+            for entity_id, needle, attrs in leaks
+        )
+    )
+
+
+async def test_sensor_attributes_do_not_leak_unique_id_when_unique_id_embeds_identifier(
+    hass: HomeAssistant,
+) -> None:
+    """Stronger variant: force an obviously-identifying string into the unique_id.
+
+    The default test unique_id is constructed from entity_ids, which are
+    relatively bland strings. Real-world unique_ids can embed VINs. We
+    swap in an unmistakable marker so a recursive substring match would
+    catch even a sliced-up leak (e.g. a sensor copying the last 8 chars).
+    """
+    hass.states.async_set(SOC_ENTITY, "50")
+    hass.states.async_set(RANGE_ENTITY, "200", {"unit_of_measurement": "km"})
+    hass.states.async_set(MILEAGE_ENTITY, "10000", {"unit_of_measurement": "km"})
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "70.0")
+
+    marker = "VINWVWZZZAUZNW123456"
+    # `make_entry`'s default unique_id is built from entity_ids; here we
+    # need a recognisable marker, so construct the MockConfigEntry directly.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=CONFIG_ENTRY_VERSION,
+        data=base_entry_data(),
+        title="Test Car",
+        unique_id=marker,
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    for ent in registry.entities.values():
+        if ent.config_entry_id != entry.entry_id:
+            continue
+        state = hass.states.get(ent.entity_id)
+        if state is None:
+            continue
+        assert not _contains_string(dict(state.attributes), marker), (
+            f"{ent.entity_id} leaks unique_id marker via attributes: "
+            f"{dict(state.attributes)!r}"
+        )
