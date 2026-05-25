@@ -272,6 +272,81 @@ async def test_backfill_from_recorder_populates_history(hass: HomeAssistant) -> 
     assert history.has_data
 
 
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_backfill_from_recorder_executes_fetch_closure(
+    hass: HomeAssistant,
+) -> None:
+    """End-to-end of the `_fetch` closure.
+
+    The other recorder tests short-circuit `async_add_executor_job` to a
+    canned return value, which means the closure body that actually calls
+    `state_changes_during_period` is never exercised. Here we route the
+    executor-job through real invocation and stub the recorder's history
+    function instead — covers the dict-lookup + list-wrap path inside
+    `_fetch`.
+    """
+    history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
+    mock_states = [_state("sensor.soc", "65", offset_days=3)]
+
+    async def _invoke_fn(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_invoke_fn)
+
+    hass.config.components.add("recorder")
+    try:
+        with (
+            patch.object(_hass_recorder, "get_instance", return_value=mock_instance),
+            patch.object(
+                _hass_recorder.history,
+                "state_changes_during_period",
+                return_value={"sensor.soc": mock_states},
+            ),
+        ):
+            await async_backfill_from_recorder(hass, history, "sensor.soc", days=8)
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert history.has_data
+    assert history.sample_count == 1
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_backfill_from_recorder_skips_logging_when_all_states_invalid(
+    hass: HomeAssistant,
+) -> None:
+    """Recorder returns only invalid states → deque stays empty, no info log.
+
+    Exercises the `if count:` False branch — the executor returned data,
+    but `async_backfill` filtered it all out (e.g. recorder gave us only
+    "unavailable" / pre-window states), leaving the deque empty.
+    """
+    history = SocHistory(hass, _entry(), soc_entity="sensor.soc")
+
+    mock_states = [
+        _state("sensor.soc", "unavailable", offset_days=3),
+        _state("sensor.soc", "unknown", offset_days=2),
+    ]
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(return_value=mock_states)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_from_recorder(hass, history, "sensor.soc", days=8)
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert not history.has_data
+
+
 # --------------------------------------------------------------------------- #
 # Tracker baseline backfill — pure helpers                                    #
 # --------------------------------------------------------------------------- #
@@ -310,10 +385,31 @@ def test_parse_distance_km_returns_none_for_unavailable() -> None:
     assert _parse_distance_km(state) is None
 
 
+def test_parse_distance_km_returns_none_for_non_numeric() -> None:
+    """Garbage strings from a buggy upstream parse to None, not raise."""
+    assert _parse_distance_km(_state("sensor.odo", "not-a-number")) is None
+
+
+def test_parse_distance_km_returns_none_when_state_is_none() -> None:
+    assert _parse_distance_km(None) is None
+
+
 def test_parse_soc_clamps_out_of_range() -> None:
     assert _parse_soc(_state("sensor.soc", "-5")) == 0.0
     assert _parse_soc(_state("sensor.soc", "120")) == 100.0
     assert _parse_soc(_state("sensor.soc", "55")) == 55.0
+
+
+def test_parse_soc_returns_none_when_state_is_none() -> None:
+    assert _parse_soc(None) is None
+
+
+def test_parse_soc_returns_none_for_non_numeric() -> None:
+    assert _parse_soc(_state("sensor.soc", "n/a")) is None
+
+
+def test_parse_soc_returns_none_for_unavailable() -> None:
+    assert _parse_soc(_state("sensor.soc", "unavailable")) is None
 
 
 def test_find_last_complete_cycle_returns_paired_edges() -> None:
@@ -365,6 +461,8 @@ def test_find_last_complete_cycle_returns_end_only_when_rising_missing() -> None
     # Rising edge isn't observed because there's no preceding "off" sample.
     assert start_ts is None
     assert end_ts is not None
+
+
 
 
 # --------------------------------------------------------------------------- #
@@ -581,6 +679,225 @@ async def test_tracker_recorder_backfill_populates_baseline_and_session(
     assert tracker.last_session is not None
     assert tracker.last_session[SESSION_START_SOC_PERCENT] == 30.0
     assert tracker.last_session[SESSION_END_SOC_PERCENT] == 82.0
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_executes_fetch_closure(
+    hass: HomeAssistant,
+) -> None:
+    """Drive the inner `_fetch` closure end-to-end (parallel to the EntityHistory one)."""
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    per_entity = {
+        CHARGING: [
+            _state(CHARGING, "off", offset_days=6),
+            _state(CHARGING, "on", offset_days=4),
+            _state(CHARGING, "off", offset_days=2),
+        ],
+        MILEAGE: [_state(MILEAGE, "20000", {"unit_of_measurement": "km"}, offset_days=2.5)],
+        SOC: [
+            _state(SOC, "30", offset_days=4.5),
+            _state(SOC, "80", offset_days=2.5),
+        ],
+    }
+
+    def _fake_state_changes(_hass, _start, *, entity_id, no_attributes):
+        return {entity_id: per_entity.get(entity_id, [])}
+
+    async def _invoke_fn(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_invoke_fn)
+
+    hass.config.components.add("recorder")
+    try:
+        with (
+            patch.object(_hass_recorder, "get_instance", return_value=mock_instance),
+            patch.object(
+                _hass_recorder.history,
+                "state_changes_during_period",
+                side_effect=_fake_state_changes,
+            ),
+        ):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 20000.0
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_no_charging_history_is_noop(
+    hass: HomeAssistant,
+) -> None:
+    """Recorder has no charging history at all → bail before scanning edges."""
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    async def _fake_executor_job(_fn, _entity_id):
+        return []  # every entity returns an empty history.
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is None
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_skips_when_mileage_missing_at_end(
+    hass: HomeAssistant,
+) -> None:
+    """Charging cycle is visible but mileage has no sample by end_ts → bail.
+
+    Without a mileage reading at the falling edge there's nothing to anchor
+    a baseline on, so the tracker is left untouched.
+    """
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    per_entity = {
+        CHARGING: [
+            _state(CHARGING, "off", offset_days=6),
+            _state(CHARGING, "on", offset_days=4),
+            _state(CHARGING, "off", offset_days=2),
+        ],
+        MILEAGE: [],  # no mileage history at all.
+        SOC: [
+            _state(SOC, "30", offset_days=4.5),
+            _state(SOC, "80", offset_days=2.5),
+        ],
+    }
+
+    async def _fake_executor_job(_fn, entity_id):
+        return per_entity[entity_id]
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is None
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_skips_when_soc_missing_at_end(
+    hass: HomeAssistant,
+) -> None:
+    """Symmetric case to the mileage-missing one — SoC unavailable at end_ts."""
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    per_entity = {
+        CHARGING: [
+            _state(CHARGING, "off", offset_days=6),
+            _state(CHARGING, "on", offset_days=4),
+            _state(CHARGING, "off", offset_days=2),
+        ],
+        MILEAGE: [
+            _state(MILEAGE, "20000", {"unit_of_measurement": "km"}, offset_days=2.5)
+        ],
+        SOC: [],  # SoC history empty.
+    }
+
+    async def _fake_executor_job(_fn, entity_id):
+        return per_entity[entity_id]
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is None
+
+
+@pytest.mark.skipif(
+    _hass_recorder is None,
+    reason="homeassistant.components.recorder not importable on this HA build",
+)
+async def test_tracker_recorder_backfill_sets_baseline_only_when_rising_edge_missing(
+    hass: HomeAssistant,
+) -> None:
+    """Falling-edge-only history → baseline backfilled, but no last_session.
+
+    Mirrors an HA restart mid-charge: only the falling edge made it into the
+    recorder. The baseline still loads (mileage + SoC at end_ts are
+    available), but the `start_ts is not None` branch is skipped, so
+    `last_session` stays empty.
+    """
+    tracker = _make_tracker(hass)
+    await tracker.async_load()
+
+    per_entity = {
+        CHARGING: [
+            _state(CHARGING, "on", offset_days=5),
+            _state(CHARGING, "off", offset_days=2),  # only the falling edge.
+        ],
+        MILEAGE: [
+            _state(MILEAGE, "30000", {"unit_of_measurement": "km"}, offset_days=2.5)
+        ],
+        SOC: [_state(SOC, "75", offset_days=2.5)],
+    }
+
+    async def _fake_executor_job(_fn, entity_id):
+        return per_entity[entity_id]
+
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(side_effect=_fake_executor_job)
+
+    hass.config.components.add("recorder")
+    try:
+        with patch.object(_hass_recorder, "get_instance", return_value=mock_instance):
+            await async_backfill_tracker_from_recorder(
+                hass, tracker, CHARGING, MILEAGE, SOC, days=8
+            )
+    finally:
+        hass.config.components.remove("recorder")
+
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 30000.0
+    assert tracker.baseline[BASELINE_SOC_PERCENT] == 75.0
+    # No rising edge in history → no session pairing.
+    assert tracker.last_session is None
 
 
 @pytest.mark.skipif(
