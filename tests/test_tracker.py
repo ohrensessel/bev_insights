@@ -11,6 +11,7 @@ from custom_components.bev_insights.const import (
     BASELINE_TIMESTAMP,
     DOMAIN,
     SESSION_END_SOC_PERCENT,
+    SESSION_LOG_MAX,
     SESSION_START_SOC_PERCENT,
     signal_baseline_updated,
 )
@@ -252,6 +253,158 @@ async def test_charge_start_with_missing_soc_skips_pending_start(
     assert tracker.baseline is not None
     assert tracker.last_session is None
     await tracker.async_stop()
+
+
+# --------------------------------------------------------------------------- #
+# Storage corruption: tolerate malformed on-disk payloads                     #
+# --------------------------------------------------------------------------- #
+
+
+def _seed_charge_tracker_storage(
+    hass_storage: dict, entry_id: str, data: dict
+) -> None:
+    """Inject a ChargeTracker Store payload directly into the mock dict."""
+    key = f"bev_insights.charge_tracker.{entry_id}"
+    hass_storage[key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": key,
+        "data": data,
+    }
+
+
+async def test_charge_tracker_load_ignores_non_dict_payload(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """A non-dict top-level payload (e.g. a string from a corrupted write)
+    must not crash load — it's silently treated as 'no baseline'.
+    """
+    entry = _entry()
+    key = f"bev_insights.charge_tracker.{entry.entry_id}"
+    hass_storage[key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": key,
+        "data": "wat",
+    }
+    tracker = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker.async_load()
+    assert tracker.baseline is None
+    assert tracker.last_session is None
+
+
+async def test_charge_tracker_load_ignores_non_dict_last_session(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """`last_session` that isn't a dict (e.g. a list from a bad migration) is ignored."""
+    entry = _entry()
+    _seed_charge_tracker_storage(
+        hass_storage,
+        entry.entry_id,
+        {
+            BASELINE_MILEAGE_KM: 12345.0,
+            BASELINE_SOC_PERCENT: 80.0,
+            "timestamp": "2026-05-01T12:00:00+00:00",
+            "last_session": ["not", "a", "dict"],
+        },
+    )
+    tracker = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker.async_load()
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 12345.0
+    # The corrupt last_session was rejected; tracker continues without it.
+    assert tracker.last_session is None
+
+
+async def test_charge_tracker_load_filters_non_dict_session_log_entries(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """Session-log items that aren't dicts (e.g. strings from a downgrade)
+    are skipped; valid items still load."""
+    entry = _entry()
+    _seed_charge_tracker_storage(
+        hass_storage,
+        entry.entry_id,
+        {
+            "session_log": [
+                "garbage_string",
+                {"start_soc_percent": 30.0, "end_soc_percent": 80.0},
+                None,
+                42,
+                {"start_soc_percent": 40.0, "end_soc_percent": 90.0},
+            ]
+        },
+    )
+    tracker = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker.async_load()
+    log = tracker.session_log
+    assert len(log) == 2
+    assert log[0]["start_soc_percent"] == 30.0
+    assert log[1]["start_soc_percent"] == 40.0
+
+
+async def test_charge_tracker_load_accepts_baseline_with_missing_optional_keys(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """A baseline payload that only has mileage_km loads with None for the
+    optional fields rather than crashing on a KeyError."""
+    entry = _entry()
+    _seed_charge_tracker_storage(
+        hass_storage,
+        entry.entry_id,
+        {BASELINE_MILEAGE_KM: 9999.0},  # SoC + timestamp absent
+    )
+    tracker = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker.async_load()
+    assert tracker.baseline is not None
+    assert tracker.baseline[BASELINE_MILEAGE_KM] == 9999.0
+    assert tracker.baseline[BASELINE_SOC_PERCENT] is None
+    assert tracker.baseline[BASELINE_TIMESTAMP] is None
+
+
+async def test_charge_tracker_load_truncates_session_log_to_max(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """An on-disk session log larger than SESSION_LOG_MAX keeps only the tail."""
+    entry = _entry()
+    too_many = [
+        {"start_soc_percent": float(i), "end_soc_percent": float(i) + 10}
+        for i in range(SESSION_LOG_MAX + 5)
+    ]
+    _seed_charge_tracker_storage(
+        hass_storage, entry.entry_id, {"session_log": too_many}
+    )
+    tracker = ChargeTracker(
+        hass, entry, charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker.async_load()
+    log = tracker.session_log
+    assert len(log) == SESSION_LOG_MAX
+    # We kept the *tail* — the latest sessions.
+    assert log[-1]["start_soc_percent"] == float(SESSION_LOG_MAX + 4)
+
+
+# --------------------------------------------------------------------------- #
+# Lifecycle edge cases                                                        #
+# --------------------------------------------------------------------------- #
+
+
+async def test_async_stop_without_start_is_noop(hass: HomeAssistant) -> None:
+    """Stopping a tracker that was never started must not raise."""
+    tracker = ChargeTracker(
+        hass, _entry(), charging_entity=CHARGING, mileage_entity=MILEAGE, soc_entity=SOC
+    )
+    await tracker.async_load()
+    await tracker.async_stop()  # _unsub is None — should be a silent no-op.
+    assert tracker.baseline is None
 
 
 async def test_baseline_persists_across_reloads(hass: HomeAssistant) -> None:
