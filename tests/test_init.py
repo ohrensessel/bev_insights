@@ -1,12 +1,14 @@
 """Tests for `async_setup_entry`, `async_unload_entry`, `async_migrate_entry`."""
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bev_insights.const import (
@@ -17,6 +19,7 @@ from custom_components.bev_insights.const import (
     CONFIG_ENTRY_VERSION,
     DOMAIN,
     LEGACY_DOMAIN,
+    signal_baseline_updated,
 )
 
 from .common import (
@@ -284,3 +287,137 @@ async def test_repair_issue_clears_on_successful_setup(
     await hass.async_block_till_done()
 
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+
+
+# --------------------------------------------------------------------------- #
+# Concurrent reload: setup must not start before unload has fully torn down.  #
+# --------------------------------------------------------------------------- #
+#
+# HA serialises async_reload internally, but the integration must still cope
+# with rapid unload→setup→unload→setup sequences (options changes during a
+# reload, repeated reload requests during config-flow churn, etc.). We assert
+# two things:
+#
+#   1. After N reloads the domain dict holds exactly one tracker — the most
+#      recent — and no stale ones have leaked in via re-entrant setup.
+#   2. After N reloads a single source-entity change fires the
+#      `signal_baseline_updated` dispatcher exactly once. Multiple firings
+#      would prove that an orphaned ChargeTracker from a prior setup is still
+#      subscribed to state changes.
+
+
+async def test_reload_replaces_tracker_and_does_not_leak_listeners(
+    hass: HomeAssistant,
+) -> None:
+    """One reload cycle: the second setup must completely replace the first."""
+    await _prime_states(hass)
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    first_tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+
+    assert await hass.config_entries.async_reload(entry.entry_id) is True
+    await hass.async_block_till_done()
+
+    second_tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    assert second_tracker is not first_tracker
+    assert entry.state is ConfigEntryState.LOADED
+
+    # Drive a falling edge and confirm exactly one baseline-update fires:
+    # if the first tracker were still subscribed there'd be two.
+    received: list[int] = []
+    unsub = async_dispatcher_connect(
+        hass,
+        signal_baseline_updated(entry.entry_id),
+        lambda: received.append(1),
+    )
+    try:
+        hass.states.async_set(CHARGING_ENTITY, "on")
+        await hass.async_block_till_done()
+        hass.states.async_set(CHARGING_ENTITY, "off")
+        await hass.async_block_till_done()
+        assert received == [1], (
+            f"Expected exactly one baseline-update after reload, got {len(received)}"
+        )
+    finally:
+        unsub()
+
+
+async def test_repeated_concurrent_reloads_leave_one_active_tracker(
+    hass: HomeAssistant,
+) -> None:
+    """N reloads kicked off as concurrent tasks must not leave orphaned trackers.
+
+    `hass.config_entries.async_reload` is serialised by HA internally, so this
+    is effectively a stress test of the integration's setup/unload boundary
+    — every prior setup's tracker must have been torn down by the time the
+    next reload begins.
+    """
+    await _prime_states(hass)
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Fire several reloads as concurrent tasks; HA's per-entry lock will
+    # serialise them, but the awaitable is what real callers see.
+    await asyncio.gather(
+        *(
+            hass.config_entries.async_reload(entry.entry_id)
+            for _ in range(5)
+        )
+    )
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    domain_data = hass.data[DOMAIN][entry.entry_id]
+    assert domain_data["tracker"] is not None
+
+    # Same single-listener check as above, after the concurrent storm.
+    received: list[int] = []
+    unsub = async_dispatcher_connect(
+        hass,
+        signal_baseline_updated(entry.entry_id),
+        lambda: received.append(1),
+    )
+    try:
+        hass.states.async_set(CHARGING_ENTITY, "on")
+        await hass.async_block_till_done()
+        hass.states.async_set(CHARGING_ENTITY, "off")
+        await hass.async_block_till_done()
+        assert received == [1], (
+            "Leaked listener after concurrent reloads: "
+            f"got {len(received)} baseline updates, expected 1"
+        )
+    finally:
+        unsub()
+
+
+async def test_unload_then_setup_via_async_reload_keeps_baseline(
+    hass: HomeAssistant,
+) -> None:
+    """The persisted baseline survives a reload — the new tracker reads it back.
+
+    Tests the unload-then-setup boundary specifically: the on-disk Store
+    write triggered by the first setup's charge-end must be flushed before
+    the second setup's `async_load` reads it.
+    """
+    await _prime_states(hass)
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Trigger a baseline capture so there's something to persist.
+    hass.states.async_set(CHARGING_ENTITY, "on")
+    await hass.async_block_till_done()
+    hass.states.async_set(CHARGING_ENTITY, "off")
+    await hass.async_block_till_done()
+    original_baseline = hass.data[DOMAIN][entry.entry_id]["tracker"].baseline
+    assert original_baseline is not None
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    new_tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    assert new_tracker.baseline == original_baseline
