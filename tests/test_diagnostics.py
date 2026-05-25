@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bev_insights.const import (
@@ -196,8 +197,6 @@ async def test_sensor_attributes_do_not_leak_unique_id(
     hass.states.async_set(CHARGING_ENTITY, "off")
     await hass.async_block_till_done()
 
-    from homeassistant.helpers import entity_registry as er
-
     registry = er.async_get(hass)
     sensors = [
         ent for ent in registry.entities.values()
@@ -257,8 +256,6 @@ async def test_sensor_attributes_do_not_leak_unique_id_when_unique_id_embeds_ide
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-
-    from homeassistant.helpers import entity_registry as er
 
     registry = er.async_get(hass)
     for ent in registry.entities.values():
