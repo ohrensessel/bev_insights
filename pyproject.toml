@@ -28,6 +28,29 @@ addopts = "-ra --strict-markers --cov=custom_components.bev_insights --cov-repor
 branch = true
 source = ["custom_components/bev_insights"]
 
+# Mutation testing — run on demand with `mutmut run`.
+# Scoped to the two files that carry the most subtle, high-value logic:
+#   - sensor/formulas.py: the dual-unit efficiency math, post-charge guards,
+#     local-week-start calendar handling
+#   - tracker.py: edge detection, last_session bookkeeping, history pruning,
+#     window-walk math for consumed_since / standstill_consumed_since
+# Other files are mostly HA glue (subscriptions, dispatcher sends, attribute
+# property bags) where mutating a `==` to `!=` doesn't expose a real bug.
+[tool.mutmut]
+paths_to_mutate = [
+  "custom_components/bev_insights/sensor/formulas.py",
+  "custom_components/bev_insights/tracker.py",
+]
+tests_dir = ["tests"]
+# Mutmut copies only the paths it mutates into the working directory; the
+# rest of the package has to be brought along explicitly or imports fail.
+also_copy = ["custom_components"]
+# --no-cov: coverage instrumentation skews timing and produces flaky
+# "killed by timeout" verdicts.
+# --ignore=tests/test_properties.py: hypothesis tests are slow per invocation
+# and the formulas they cover are already exercised by deterministic tests.
+pytest_add_cli_args = ["--no-cov", "-x", "--ignore=tests/test_properties.py"]
+
 [tool.coverage.report]
 # Lines that only exist for type checkers, abstract stubs marked with
 # `pragma: no cover`, and a few HA hooks that aren't exercised in the

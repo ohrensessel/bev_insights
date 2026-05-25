@@ -43,12 +43,23 @@ Everything runs from the repo root with a virtualenv that has
 `requirements_test.txt` installed.
 
 ```bash
-pytest                    # full test suite + coverage report (~15s, 185+ tests)
+pytest                    # full test suite + coverage report (~15s, 270+ tests)
 pytest --no-cov           # skip coverage for fast iteration
 ruff check custom_components tests
 mypy                      # config-driven, scopes to custom_components/
 python -m py_compile custom_components/bev_insights/sensor/*.py
+mutmut run                # mutation testing (slow — ~20 min). Config in pyproject.toml.
+mutmut results            # show surviving / killed / timed-out mutants
 ```
+
+`mutmut` is scoped to `sensor/formulas.py` + `tracker.py` — the two files
+that carry the most subtle math. ~500 mutants per run; ~9 % survive at
+the time of writing, mostly string literals (icon names) and equivalent
+and/or reformulations that don't change behaviour. Mutmut is **not** run
+in CI on every PR (it's too slow); use it locally when refactoring
+formula code to confirm the tests still notice. It's available via a
+`workflow_dispatch` trigger on both Gitea and GitHub workflows for
+explicit on-demand runs.
 
 Coverage is wired into pytest's default addopts via `pyproject.toml`
 (`[tool.pytest.ini_options].addopts`). The terminal report shows

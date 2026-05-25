@@ -5,3 +5,8 @@ __pycache__/
 .coverage
 coverage.xml
 htmlcov/
+# mutmut copies the project here and writes stats; never check in.
+mutants/
+mutmut-stats.json
+mutmut-cicd-stats.json
+.mutmut-cache

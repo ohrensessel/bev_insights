@@ -1,0 +1,38 @@
+name: mutation
+
+# Mirror of .github/workflows/mutation.yml for the Gitea side.
+# Only fires on explicit manual triggers (Actions → mutation → Run
+# workflow) — mutmut takes ~20 minutes and would slow every PR.
+on:
+  workflow_dispatch:
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_test.txt
+          pip install "pytest-homeassistant-custom-component"
+
+      - name: Run mutation tests
+        run: mutmut run
+
+      - name: Summarise mutation results
+        if: always()
+        run: |
+          mutmut export-cicd-stats
+          echo "--- Surviving mutants ---"
+          mutmut results | grep ": survived" || echo "No surviving mutants — perfect run."
+          echo "--- Summary ---"
+          cat mutants/mutmut-cicd-stats.json
