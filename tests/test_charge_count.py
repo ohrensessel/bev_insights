@@ -16,6 +16,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_history,
 )
 
 
@@ -46,10 +47,11 @@ async def test_charge_count_zero_when_no_charges(hass: HomeAssistant) -> None:
 
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.append((now - timedelta(days=5), 80.0))
-    soc_history._samples.append((now - timedelta(days=4), 70.0))
-    soc_history._samples.append((now, 60.0))
+    seed_history(soc_history, [
+        (now - timedelta(days=5), 80.0),
+        (now - timedelta(days=4), 70.0),
+        (now, 60.0),
+    ])
 
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -67,12 +69,13 @@ async def test_charge_count_one_session(hass: HomeAssistant) -> None:
 
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
     # Discharge → charge → discharge
-    soc_history._samples.append((now - timedelta(days=6), 80.0))
-    soc_history._samples.append((now - timedelta(days=5), 50.0))
-    soc_history._samples.append((now - timedelta(days=4), 90.0))  # +40%: one session
-    soc_history._samples.append((now, 60.0))
+    seed_history(soc_history, [
+        (now - timedelta(days=6), 80.0),
+        (now - timedelta(days=5), 50.0),
+        (now - timedelta(days=4), 90.0),  # +40%: one session
+        (now, 60.0),
+    ])
 
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -90,13 +93,14 @@ async def test_charge_count_two_sessions(hass: HomeAssistant) -> None:
 
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.append((now - timedelta(days=6), 80.0))
-    soc_history._samples.append((now - timedelta(days=5), 40.0))
-    soc_history._samples.append((now - timedelta(days=4), 85.0))  # first charge
-    soc_history._samples.append((now - timedelta(days=3), 55.0))
-    soc_history._samples.append((now - timedelta(days=2), 90.0))  # second charge
-    soc_history._samples.append((now, 70.0))
+    seed_history(soc_history, [
+        (now - timedelta(days=6), 80.0),
+        (now - timedelta(days=5), 40.0),
+        (now - timedelta(days=4), 85.0),  # first charge
+        (now - timedelta(days=3), 55.0),
+        (now - timedelta(days=2), 90.0),  # second charge
+        (now, 70.0),
+    ])
 
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -114,10 +118,11 @@ async def test_charge_count_noise_ignored(hass: HomeAssistant) -> None:
 
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.append((now - timedelta(days=3), 60.0))
-    soc_history._samples.append((now - timedelta(days=2), 62.0))  # +2 %: noise
-    soc_history._samples.append((now, 58.0))
+    seed_history(soc_history, [
+        (now - timedelta(days=3), 60.0),
+        (now - timedelta(days=2), 62.0),  # +2 %: noise
+        (now, 58.0),
+    ])
 
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()

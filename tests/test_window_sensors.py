@@ -29,6 +29,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_history,
 )
 
 
@@ -69,14 +70,11 @@ async def test_energy_consumed_rolling_7d_basic(hass: HomeAssistant) -> None:
     soc_history, _ = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 100.0),  # anchor before cutoff
-            (now - timedelta(days=3), 100.0),
-            (now - timedelta(days=1), 60.0),
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 100.0),  # anchor before cutoff
+        (now - timedelta(days=3), 100.0),
+        (now - timedelta(days=1), 60.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -96,15 +94,12 @@ async def test_energy_consumed_ignores_charging_inside_window(
     soc_history, _ = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 80.0),  # anchor
-            (now - timedelta(days=5), 40.0),  # -40 driving
-            (now - timedelta(days=3), 90.0),  # +50 charging (ignored)
-            (now - timedelta(days=1), 60.0),  # -30 driving
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),  # anchor
+        (now - timedelta(days=5), 40.0),  # -40 driving
+        (now - timedelta(days=3), 90.0),  # +50 charging (ignored)
+        (now - timedelta(days=1), 60.0),  # -30 driving
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -119,7 +114,7 @@ async def test_energy_consumed_unavailable_without_any_samples(
     """No samples at all → unavailable."""
     entry = await _setup_full(hass)
     soc_history, _ = _histories(hass, entry)
-    soc_history._samples.clear()
+    seed_history(soc_history, [])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_energy_consumed_rolling_7_days_factory")
@@ -135,13 +130,10 @@ async def test_energy_consumed_fresh_install_uses_oldest_as_anchor(
     soc_history, _ = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(hours=2), 80.0),  # oldest → anchor (fallback)
-            (now - timedelta(hours=1), 60.0),  # -20 driving
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(hours=2), 80.0),  # oldest → anchor (fallback)
+        (now - timedelta(hours=1), 60.0),  # -20 driving
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -169,13 +161,10 @@ async def test_energy_consumed_this_week_is_total_with_last_reset(
     soc_history, _ = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 80.0),
-            (now - timedelta(hours=1), 60.0),
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),
+        (now - timedelta(hours=1), 60.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -202,10 +191,10 @@ async def test_energy_consumed_unavailable_when_actual_capacity_missing(
     soc_history, _ = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [(now - timedelta(days=8), 100.0), (now - timedelta(days=1), 60.0)]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 100.0),
+        (now - timedelta(days=1), 60.0),
+    ])
 
     hass.states.async_set(ACTUAL_CAPACITY_ENTITY, "unavailable")
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
@@ -227,14 +216,11 @@ async def test_distance_rolling_7d_math(hass: HomeAssistant) -> None:
     _, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),  # anchor before cutoff
-            (now - timedelta(days=4), 10100.0),
-            (now, 10250.0),
-        ]
-    )
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),  # anchor before cutoff
+        (now - timedelta(days=4), 10100.0),
+        (now, 10250.0),
+    ])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -247,7 +233,7 @@ async def test_distance_rolling_7d_unavailable_without_anchor(
 ) -> None:
     entry = await _setup_full(hass)
     _, mileage_history = _histories(hass, entry)
-    mileage_history._samples.clear()
+    seed_history(mileage_history, [])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_distance_rolling_7_days")
@@ -268,13 +254,10 @@ async def test_distance_this_week_is_total_with_last_reset(
     _, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=30), 10000.0),
-            (now, 10042.5),
-        ]
-    )
+    seed_history(mileage_history, [
+        (now - timedelta(days=30), 10000.0),
+        (now, 10042.5),
+    ])
     hass.states.async_set(MILEAGE_ENTITY, "10042.5", {"unit_of_measurement": "km"})
     await hass.async_block_till_done()
 
@@ -294,15 +277,12 @@ async def test_distance_this_week_with_pre_week_anchor(
     _, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    mileage_history._samples.clear()
     # 30 days back guarantees we sit before any reasonable week_start, so the
     # baseline-aware path is exercised regardless of which weekday `now` is.
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=30), 10000.0),
-            (now, 10042.5),
-        ]
-    )
+    seed_history(mileage_history, [
+        (now - timedelta(days=30), 10000.0),
+        (now, 10042.5),
+    ])
     hass.states.async_set(MILEAGE_ENTITY, "10042.5", {"unit_of_measurement": "km"})
     await hass.async_block_till_done()
 
@@ -320,14 +300,11 @@ async def test_distance_this_week_fresh_install_sets_partial_flag(
     _, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    mileage_history._samples.clear()
     # Both samples sit inside the current week (a few minutes apart).
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(minutes=10), 10000.0),
-            (now, 10010.0),
-        ]
-    )
+    seed_history(mileage_history, [
+        (now - timedelta(minutes=10), 10000.0),
+        (now, 10010.0),
+    ])
     hass.states.async_set(MILEAGE_ENTITY, "10010", {"unit_of_measurement": "km"})
     await hass.async_block_till_done()
 
@@ -349,22 +326,16 @@ async def test_avg_efficiency_window_kwh_per_100km(hass: HomeAssistant) -> None:
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 100.0),
-            (now - timedelta(days=5), 100.0),
-            (now - timedelta(days=1), 50.0),
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=5), 10000.0),
-            (now - timedelta(days=1), 10200.0),
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 100.0),
+        (now - timedelta(days=5), 100.0),
+        (now - timedelta(days=1), 50.0),
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=5), 10000.0),
+        (now - timedelta(days=1), 10200.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -381,20 +352,14 @@ async def test_avg_efficiency_window_km_per_kwh(hass: HomeAssistant) -> None:
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 100.0),
-            (now - timedelta(days=1), 50.0),
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=1), 10200.0),
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 100.0),
+        (now - timedelta(days=1), 50.0),
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=1), 10200.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -408,8 +373,8 @@ async def test_avg_efficiency_window_unavailable_without_data(
 ) -> None:
     entry = await _setup_full(hass)
     soc_history, mileage_history = _histories(hass, entry)
-    soc_history._samples.clear()
-    mileage_history._samples.clear()
+    seed_history(soc_history, [])
+    seed_history(mileage_history, [])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -428,20 +393,14 @@ async def test_avg_efficiency_window_fresh_install_uses_oldest_as_anchor(
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(hours=2), 80.0),  # oldest → anchor (fallback)
-            (now - timedelta(hours=1), 60.0),  # -20 driving
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(hours=2), 10000.0),  # oldest → anchor (fallback)
-            (now - timedelta(hours=1), 10100.0),  # +100 km
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(hours=2), 80.0),  # oldest → anchor (fallback)
+        (now - timedelta(hours=1), 60.0),  # -20 driving
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(hours=2), 10000.0),  # oldest → anchor (fallback)
+        (now - timedelta(hours=1), 10100.0),  # +100 km
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -465,21 +424,15 @@ async def test_standstill_consumption_pure_parked(hass: HomeAssistant) -> None:
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 80.0),  # anchor
-            (now - timedelta(days=3), 80.0),
-            (now - timedelta(days=1), 70.0),  # -10% while parked
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=1), 10000.0),  # no movement
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),  # anchor
+        (now - timedelta(days=3), 80.0),
+        (now - timedelta(days=1), 70.0),  # -10% while parked
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=1), 10000.0),  # no movement
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -496,20 +449,14 @@ async def test_standstill_consumption_pure_driving(hass: HomeAssistant) -> None:
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 80.0),
-            (now - timedelta(days=1), 60.0),  # -20% while driving
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=1), 10150.0),  # +150 km
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),
+        (now - timedelta(days=1), 60.0),  # -20% while driving
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=1), 10150.0),  # +150 km
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -524,22 +471,16 @@ async def test_standstill_consumption_mixed(hass: HomeAssistant) -> None:
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 90.0),  # anchor
-            (now - timedelta(days=4), 85.0),  # -5% parked
-            (now - timedelta(days=2), 70.0),  # -15% driving
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=4), 10000.0),  # parked
-            (now - timedelta(days=2), 10100.0),  # drove 100 km
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 90.0),  # anchor
+        (now - timedelta(days=4), 85.0),  # -5% parked
+        (now - timedelta(days=2), 70.0),  # -15% driving
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=4), 10000.0),  # parked
+        (now - timedelta(days=2), 10100.0),  # drove 100 km
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -556,11 +497,11 @@ async def test_standstill_consumption_unavailable_without_mileage(
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [(now - timedelta(days=8), 80.0), (now - timedelta(days=1), 70.0)]
-    )
-    mileage_history._samples.clear()
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),
+        (now - timedelta(days=1), 70.0),
+    ])
+    seed_history(mileage_history, [])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -588,20 +529,14 @@ async def test_standstill_consumption_custom_threshold(
     mileage_history = domain_data["mileage_history"]
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 80.0),
-            (now - timedelta(days=1), 70.0),  # -10% with 1.5 km movement
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=1), 10001.5),  # only 1.5 km → < 2 km threshold
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),
+        (now - timedelta(days=1), 70.0),  # -10% with 1.5 km movement
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=1), 10001.5),  # only 1.5 km → < 2 km threshold
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -619,14 +554,14 @@ async def test_standstill_consumption_this_week_is_total(
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [(now - timedelta(days=8), 80.0), (now - timedelta(hours=1), 78.0)]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [(now - timedelta(days=8), 10000.0), (now - timedelta(hours=1), 10000.0)]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 80.0),
+        (now - timedelta(hours=1), 78.0),
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(hours=1), 10000.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
 
@@ -644,20 +579,14 @@ async def test_avg_efficiency_window_actual_capacity_variant_uses_actual(
     soc_history, mileage_history = _histories(hass, entry)
 
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.extend(
-        [
-            (now - timedelta(days=8), 100.0),
-            (now - timedelta(days=1), 50.0),
-        ]
-    )
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (now - timedelta(days=8), 10000.0),
-            (now - timedelta(days=1), 10200.0),
-        ]
-    )
+    seed_history(soc_history, [
+        (now - timedelta(days=8), 100.0),
+        (now - timedelta(days=1), 50.0),
+    ])
+    seed_history(mileage_history, [
+        (now - timedelta(days=8), 10000.0),
+        (now - timedelta(days=1), 10200.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()

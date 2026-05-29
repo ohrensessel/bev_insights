@@ -61,3 +61,18 @@ def make_entry(
 def set_state(hass, entity_id: str, state: str, **attributes: Any) -> None:
     """Convenience wrapper around hass.states.async_set."""
     hass.states.async_set(entity_id, state, attributes or None)
+
+
+def seed_history(history: Any, samples: Any) -> None:
+    """Replace an ``EntityHistory``'s recorded samples with ``samples``.
+
+    The sample deque is a private implementation detail of ``EntityHistory``.
+    Routing every test that seeds history through this one helper means a
+    change to that storage (deque → list, added insert-time pruning, a rename)
+    only has to be chased here, not across ~130 call sites.
+
+    ``samples`` is any iterable of ``(timestamp, value)`` pairs; passing an
+    empty iterable clears the history.
+    """
+    history._samples.clear()
+    history._samples.extend(samples)

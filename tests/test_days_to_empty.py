@@ -20,6 +20,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_history,
 )
 
 
@@ -61,9 +62,10 @@ async def test_days_to_low_soc_basic(hass: HomeAssistant) -> None:
     # Inject 14% SoC consumption over the past 7 days (2%/day average).
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.append((now - timedelta(days=7), 74.0))
-    soc_history._samples.append((now, 60.0))
+    seed_history(soc_history, [
+        (now - timedelta(days=7), 74.0),
+        (now, 60.0),
+    ])
 
     # Fire the history dispatcher so the sensor recomputes.
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
@@ -82,9 +84,10 @@ async def test_days_to_low_soc_at_threshold_is_unavailable(hass: HomeAssistant) 
 
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.append((now - timedelta(days=7), 34.0))
-    soc_history._samples.append((now, 20.0))
+    seed_history(soc_history, [
+        (now - timedelta(days=7), 34.0),
+        (now, 20.0),
+    ])
 
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
@@ -104,9 +107,10 @@ async def test_days_to_low_soc_custom_threshold(hass: HomeAssistant) -> None:
 
     soc_history = hass.data[DOMAIN][entry.entry_id]["soc_history"]
     now = dt_util.utcnow()
-    soc_history._samples.clear()
-    soc_history._samples.append((now - timedelta(days=7), 57.0))
-    soc_history._samples.append((now, 50.0))  # 7% drop → 1%/day
+    seed_history(soc_history, [
+        (now - timedelta(days=7), 57.0),
+        (now, 50.0),  # 7% drop → 1%/day
+    ])
 
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()

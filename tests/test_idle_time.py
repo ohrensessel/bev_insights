@@ -22,6 +22,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_history,
 )
 
 
@@ -56,10 +57,7 @@ async def test_idle_time_reports_hours_since_last_change(
     """Latest sample at -5h → sensor reports ~5.0 h."""
     entry = await _setup_full(hass)
     mileage_history = _mileage_history(hass, entry)
-    mileage_history._samples.clear()
-    mileage_history._samples.append(
-        (dt_util.utcnow() - timedelta(hours=5), 10000.0)
-    )
+    seed_history(mileage_history, [(dt_util.utcnow() - timedelta(hours=5), 10000.0)])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_idle_time")
@@ -73,14 +71,11 @@ async def test_idle_time_reads_from_latest_when_multiple_samples(
     """Multiple samples → the newest (= last movement) wins."""
     entry = await _setup_full(hass)
     mileage_history = _mileage_history(hass, entry)
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (dt_util.utcnow() - timedelta(hours=72), 9000.0),
-            (dt_util.utcnow() - timedelta(hours=24), 9500.0),
-            (dt_util.utcnow() - timedelta(hours=2), 9700.0),  # latest
-        ]
-    )
+    seed_history(mileage_history, [
+        (dt_util.utcnow() - timedelta(hours=72), 9000.0),
+        (dt_util.utcnow() - timedelta(hours=24), 9500.0),
+        (dt_util.utcnow() - timedelta(hours=2), 9700.0),  # latest
+    ])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_idle_time")
@@ -94,7 +89,7 @@ async def test_idle_time_unavailable_when_history_empty(
     """Empty deque → unavailable, no crash."""
     entry = await _setup_full(hass)
     mileage_history = _mileage_history(hass, entry)
-    mileage_history._samples.clear()
+    seed_history(mileage_history, [])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_idle_time")
@@ -107,9 +102,8 @@ async def test_idle_time_attributes_expose_last_movement(
 ) -> None:
     entry = await _setup_full(hass)
     mileage_history = _mileage_history(hass, entry)
-    mileage_history._samples.clear()
     ts = dt_util.utcnow() - timedelta(hours=10)
-    mileage_history._samples.append((ts, 12345.0))
+    seed_history(mileage_history, [(ts, 12345.0)])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_idle_time")
@@ -125,10 +119,7 @@ async def test_idle_time_clamps_negative_to_zero(hass: HomeAssistant) -> None:
     """
     entry = await _setup_full(hass)
     mileage_history = _mileage_history(hass, entry)
-    mileage_history._samples.clear()
-    mileage_history._samples.append(
-        (dt_util.utcnow() + timedelta(minutes=5), 9000.0)
-    )
+    seed_history(mileage_history, [(dt_util.utcnow() + timedelta(minutes=5), 9000.0)])
     async_dispatcher_send(hass, signal_mileage_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_idle_time")

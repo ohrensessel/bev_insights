@@ -20,6 +20,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_history,
 )
 
 
@@ -67,13 +68,15 @@ async def test_standstill_ratio_all_parked(hass: HomeAssistant) -> None:
     mil_h = hass.data[DOMAIN][entry.entry_id]["mileage_history"]
     now = dt_util.utcnow()
 
-    soc_h._samples.clear()
-    soc_h._samples.append((now - timedelta(days=3), 80.0))
-    soc_h._samples.append((now, 60.0))  # 20 % drop
+    seed_history(soc_h, [
+        (now - timedelta(days=3), 80.0),
+        (now, 60.0),  # 20 % drop
+    ])
 
-    mil_h._samples.clear()
-    mil_h._samples.append((now - timedelta(days=3), 10000.0))
-    mil_h._samples.append((now, 10000.0))  # no movement
+    seed_history(mil_h, [
+        (now - timedelta(days=3), 10000.0),
+        (now, 10000.0),  # no movement
+    ])
 
     await _pump(hass, entry.entry_id)
 
@@ -92,13 +95,15 @@ async def test_standstill_ratio_all_driving(hass: HomeAssistant) -> None:
     mil_h = hass.data[DOMAIN][entry.entry_id]["mileage_history"]
     now = dt_util.utcnow()
 
-    soc_h._samples.clear()
-    soc_h._samples.append((now - timedelta(days=3), 80.0))
-    soc_h._samples.append((now, 60.0))  # 20 % drop while driving
+    seed_history(soc_h, [
+        (now - timedelta(days=3), 80.0),
+        (now, 60.0),  # 20 % drop while driving
+    ])
 
-    mil_h._samples.clear()
-    mil_h._samples.append((now - timedelta(days=3), 10000.0))
-    mil_h._samples.append((now, 10200.0))  # 200 km driven
+    seed_history(mil_h, [
+        (now - timedelta(days=3), 10000.0),
+        (now, 10200.0),  # 200 km driven
+    ])
 
     await _pump(hass, entry.entry_id)
 
@@ -123,17 +128,19 @@ async def test_standstill_ratio_mixed(hass: HomeAssistant) -> None:
     t2 = now - timedelta(days=3)
     t3 = now - timedelta(days=2)
 
-    soc_h._samples.clear()
-    soc_h._samples.append((t0, 80.0))
-    soc_h._samples.append((t1, 70.0))  # −10 % parked
-    soc_h._samples.append((t2, 70.0))  # flat
-    soc_h._samples.append((t3, 60.0))  # −10 % driving
+    seed_history(soc_h, [
+        (t0, 80.0),
+        (t1, 70.0),  # −10 % parked
+        (t2, 70.0),  # flat
+        (t3, 60.0),  # −10 % driving
+    ])
 
-    mil_h._samples.clear()
-    mil_h._samples.append((t0, 10000.0))
-    mil_h._samples.append((t1, 10000.0))  # still parked
-    mil_h._samples.append((t2, 10000.0))
-    mil_h._samples.append((t3, 10100.0))  # 100 km driven
+    seed_history(mil_h, [
+        (t0, 10000.0),
+        (t1, 10000.0),  # still parked
+        (t2, 10000.0),
+        (t3, 10100.0),  # 100 km driven
+    ])
 
     await _pump(hass, entry.entry_id)
 

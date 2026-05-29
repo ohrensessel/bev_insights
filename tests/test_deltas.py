@@ -30,6 +30,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_history,
 )
 
 
@@ -81,16 +82,13 @@ async def test_distance_week_delta_positive_when_drove_more(
     _, mileage_history = _histories(hass, entry)
     _, lws, lwe, _ = _week_anchors(hass)
 
-    mileage_history._samples.clear()
     # X at last_week_start - 2h, Y at last_week_end - 2h, current = W.
     # Sensor formula: delta = (W - Y) - (Y - X) = W - 2Y + X
     # With X=10000, Y=10300, W=10700 → delta = 100.
-    mileage_history._samples.extend(
-        [
-            (lws - timedelta(hours=2), 10000.0),
-            (lwe - timedelta(hours=2), 10300.0),
-        ]
-    )
+    seed_history(mileage_history, [
+        (lws - timedelta(hours=2), 10000.0),
+        (lwe - timedelta(hours=2), 10300.0),
+    ])
     hass.states.async_set(
         MILEAGE_ENTITY, "10700", {"unit_of_measurement": "km"}
     )
@@ -106,14 +104,11 @@ async def test_distance_week_delta_negative_when_drove_less(
     entry = await _setup_full(hass)
     _, mileage_history = _histories(hass, entry)
     _, lws, lwe, _ = _week_anchors(hass)
-    mileage_history._samples.clear()
     # X=10000, Y=10500 (500 last week), W=10600 (100 this week) → delta = -400
-    mileage_history._samples.extend(
-        [
-            (lws - timedelta(hours=2), 10000.0),
-            (lwe - timedelta(hours=2), 10500.0),
-        ]
-    )
+    seed_history(mileage_history, [
+        (lws - timedelta(hours=2), 10000.0),
+        (lwe - timedelta(hours=2), 10500.0),
+    ])
     hass.states.async_set(
         MILEAGE_ENTITY, "10600", {"unit_of_measurement": "km"}
     )
@@ -128,7 +123,7 @@ async def test_distance_week_delta_unavailable_without_history(
 ) -> None:
     entry = await _setup_full(hass)
     _, mileage_history = _histories(hass, entry)
-    mileage_history._samples.clear()
+    seed_history(mileage_history, [])
     hass.states.async_set(
         MILEAGE_ENTITY, "11000", {"unit_of_measurement": "km"}
     )
@@ -146,13 +141,10 @@ async def test_distance_week_delta_unavailable_when_no_pre_last_week_sample(
     _, mileage_history = _histories(hass, entry)
     _, lws, _, _ = _week_anchors(hass)
     # All samples AFTER last_week_start → value_at(last_week_start) is None.
-    mileage_history._samples.clear()
-    mileage_history._samples.extend(
-        [
-            (lws + timedelta(hours=2), 10000.0),
-            (dt_util.utcnow() - timedelta(hours=1), 10200.0),
-        ]
-    )
+    seed_history(mileage_history, [
+        (lws + timedelta(hours=2), 10000.0),
+        (dt_util.utcnow() - timedelta(hours=1), 10200.0),
+    ])
     hass.states.async_set(
         MILEAGE_ENTITY, "10200", {"unit_of_measurement": "km"}
     )
@@ -178,16 +170,13 @@ async def test_energy_week_delta_negative_when_consumed_less(
     soc_history, _ = _histories(hass, entry)
     tws, lws, lwe, _ = _week_anchors(hass)
 
-    soc_history._samples.clear()
     # 90 → 50 across last-week window (drop 40), 50 → 30 this week (drop 20)
-    soc_history._samples.extend(
-        [
-            (lws - timedelta(hours=2), 90.0),
-            (lwe - timedelta(hours=2), 50.0),  # 40 pp drop "last week"
-            (tws + timedelta(hours=2), 50.0),  # no change at boundary
-            (dt_util.utcnow() - timedelta(hours=1), 30.0),  # 20 pp this week
-        ]
-    )
+    seed_history(soc_history, [
+        (lws - timedelta(hours=2), 90.0),
+        (lwe - timedelta(hours=2), 50.0),  # 40 pp drop "last week"
+        (tws + timedelta(hours=2), 50.0),  # no change at boundary
+        (dt_util.utcnow() - timedelta(hours=1), 30.0),  # 20 pp this week
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_energy_consumed_week_delta_actual")
@@ -200,7 +189,7 @@ async def test_energy_week_delta_unavailable_without_history(
 ) -> None:
     entry = await _setup_full(hass)
     soc_history, _ = _histories(hass, entry)
-    soc_history._samples.clear()
+    seed_history(soc_history, [])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_energy_consumed_week_delta_actual")
@@ -215,17 +204,14 @@ async def test_energy_week_delta_factory_uses_factory_capacity(
     entry = await _setup_full(hass)
     soc_history, _ = _histories(hass, entry)
     tws, lws, lwe, _ = _week_anchors(hass)
-    soc_history._samples.clear()
     # Last week: 30 pp drop. This week so far: 10 pp drop. Delta SoC = -20 pp.
     # Factory delta kWh = -20 × 77 / 100 = -15.4 kWh.
-    soc_history._samples.extend(
-        [
-            (lws - timedelta(hours=2), 90.0),
-            (lwe - timedelta(hours=2), 60.0),
-            (tws + timedelta(hours=2), 60.0),
-            (dt_util.utcnow() - timedelta(hours=1), 50.0),
-        ]
-    )
+    seed_history(soc_history, [
+        (lws - timedelta(hours=2), 90.0),
+        (lwe - timedelta(hours=2), 60.0),
+        (tws + timedelta(hours=2), 60.0),
+        (dt_util.utcnow() - timedelta(hours=1), 50.0),
+    ])
     async_dispatcher_send(hass, signal_soc_history_updated(entry.entry_id))
     await hass.async_block_till_done()
     state = _find_state(hass, "_energy_consumed_week_delta_factory")
