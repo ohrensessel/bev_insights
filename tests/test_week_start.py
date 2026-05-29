@@ -126,16 +126,16 @@ async def test_local_week_start_on_fall_back_sunday(
         )
 
 
-async def test_local_week_start_when_monday_itself_is_dst_changeover(
+async def test_local_week_start_across_gmt_bst_changeover_weeks(
     hass: HomeAssistant,
 ) -> None:
-    """A week whose Monday-00:00 local sits across a DST boundary.
+    """Week-start anchoring on either side of the GMT→BST changeover.
 
-    For a tz where DST starts on a Monday at 00:00 local (rare but legal),
-    `_local_week_start` should still anchor on the local-midnight Monday.
-    Using Europe/London where 2026-03-29 is a Sunday and DST starts at
-    01:00 UTC: by Tuesday 12:00 UTC we're well in BST (UTC+1). Monday
-    2026-03-23 00:00 local was still GMT (UTC+0) → 2026-03-23 00:00 UTC.
+    Europe/London switches GMT→BST at 01:00 UTC on Sunday 2026-03-29. We
+    sample the Tuesday *before* (still GMT, UTC+0) and the Tuesday *after*
+    (now BST, UTC+1) and confirm each week anchors on its own local-midnight
+    Monday — the pre-DST week's Monday stays at 00:00 UTC, the post-DST
+    week's Monday shifts to 23:00 UTC the previous day.
     """
     hass.config.time_zone = "Europe/London"
     now_utc = datetime(2026, 3, 24, 12, 0, tzinfo=UTC)  # Tuesday post-DST? no, pre.
