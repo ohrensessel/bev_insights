@@ -76,3 +76,15 @@ def seed_history(history: Any, samples: Any) -> None:
     """
     history._samples.clear()
     history._samples.extend(samples)
+
+
+def seed_baseline(hass, entry, baseline: Any) -> None:
+    """Replace a ``ChargeTracker``'s baseline (test seam for its private state).
+
+    Like :func:`seed_history`, this is the single place that pokes the
+    tracker's private ``_baseline`` so a change to that attribute only has to
+    be chased here. Callers fire the baseline-updated dispatcher signal
+    themselves if the sensors under test need to react.
+    """
+    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
+    tracker._baseline = baseline

@@ -35,6 +35,7 @@ from .common import (
     RANGE_ENTITY,
     SOC_ENTITY,
     make_entry,
+    seed_baseline,
 )
 
 
@@ -581,8 +582,7 @@ async def test_avg_charging_power_zero_soc_delta_is_unavailable(
 
 def _seed_baseline(hass: HomeAssistant, entry, baseline: dict) -> None:
     """Replace the tracker's baseline and fire the dispatcher signal."""
-    tracker = hass.data[DOMAIN][entry.entry_id]["tracker"]
-    tracker._baseline = baseline
+    seed_baseline(hass, entry, baseline)
     async_dispatcher_send(hass, signal_baseline_updated(entry.entry_id))
 
 
