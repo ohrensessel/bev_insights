@@ -104,7 +104,7 @@ def test_temperature_band(temp_c: float, expected: str) -> None:
 async def test_local_day_windows_splits_on_local_midnight(
     hass: HomeAssistant,
 ) -> None:
-    await hass.config.async_set_time_zone("UTC")
+    hass.config.time_zone = "UTC"
     start = dt_util.parse_datetime("2026-01-01T06:00:00+00:00")
     end = dt_util.parse_datetime("2026-01-03T09:00:00+00:00")
     windows = _local_day_windows(start, end, hass)
@@ -224,7 +224,7 @@ async def test_config_flow_accepts_outside_temp_sensor(hass: HomeAssistant) -> N
 
 
 async def _setup(hass: HomeAssistant, *, with_temp: bool):
-    await hass.config.async_set_time_zone("UTC")
+    hass.config.time_zone = "UTC"
     hass.states.async_set(SOC_ENTITY, "50")
     hass.states.async_set(RANGE_ENTITY, "200", {"unit_of_measurement": "km"})
     hass.states.async_set(MILEAGE_ENTITY, "10000", {"unit_of_measurement": "km"})
@@ -270,7 +270,7 @@ async def test_sensor_unavailable_without_temperature_samples(
     hass: HomeAssistant,
 ) -> None:
     """With the entity unavailable at startup the sensor has no data."""
-    await hass.config.async_set_time_zone("UTC")
+    hass.config.time_zone = "UTC"
     hass.states.async_set(SOC_ENTITY, "50")
     hass.states.async_set(RANGE_ENTITY, "200", {"unit_of_measurement": "km"})
     hass.states.async_set(MILEAGE_ENTITY, "10000", {"unit_of_measurement": "km"})
