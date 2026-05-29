@@ -222,8 +222,8 @@ def _range_loss_percent(bands: list[dict[str, Any]]) -> float | None:
     ]
     if len(populated) < 2:
         return None
-    coldest = populated[0]["factory_kwh_per_100km"]
-    warmest = populated[-1]["factory_kwh_per_100km"]
+    coldest: float = populated[0]["factory_kwh_per_100km"]
+    warmest: float = populated[-1]["factory_kwh_per_100km"]
     if warmest <= 0:
         return None
     return round((coldest - warmest) / warmest * 100.0, 1)
