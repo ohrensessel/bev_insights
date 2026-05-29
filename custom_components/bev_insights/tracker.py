@@ -369,10 +369,10 @@ class EntityHistory:
     _label: str = "value"
     _value_key: str = "value"
 
-    def _read(self) -> float | None:  # pragma: no cover - overridden
+    def _read(self) -> float | None:
         raise NotImplementedError
 
-    def _signal(self) -> str:  # pragma: no cover - overridden
+    def _signal(self) -> str:
         raise NotImplementedError
 
     # --- impl ---------------------------------------------------------- #

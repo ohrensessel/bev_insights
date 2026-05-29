@@ -6,10 +6,19 @@ from datetime import timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bev_insights.const import DOMAIN, signal_mileage_history_updated
-from custom_components.bev_insights.tracker import MileageHistory, SocHistory
+from custom_components.bev_insights.const import (
+    DOMAIN,
+    signal_mileage_history_updated,
+    signal_soc_history_updated,
+)
+from custom_components.bev_insights.tracker import (
+    EntityHistory,
+    MileageHistory,
+    SocHistory,
+)
 
 
 def _entry() -> MockConfigEntry:
@@ -492,3 +501,54 @@ async def test_soc_history_clamps_out_of_range_values(
     await hass.async_block_till_done()
     assert history.latest_sample[1] == 0.0
     await history.async_stop()
+
+
+# --------------------------------------------------------------------------- #
+# Subclass hook contract: _read / _signal                                     #
+# --------------------------------------------------------------------------- #
+#
+# `EntityHistory._read` / `_signal` are abstract stubs that raise. Recording
+# and signalling both route through them, so a concrete subclass that forgot
+# to override either would fail at runtime inside HA. These tests pin the
+# contract directly: the base raises, and every concrete subclass overrides.
+
+
+async def test_base_entity_history_hooks_raise(hass: HomeAssistant) -> None:
+    """The un-overridden base hooks must raise NotImplementedError."""
+    base = EntityHistory(
+        hass,
+        _entry(),
+        source_entity="sensor.whatever",
+        storage_key_prefix="bev_insights.base_test",
+        max_age_days=8,
+    )
+    with pytest.raises(NotImplementedError):
+        base._read()
+    with pytest.raises(NotImplementedError):
+        base._signal()
+
+
+@pytest.mark.parametrize(
+    ("make", "expected_signal"),
+    [
+        (
+            lambda hass: MileageHistory(hass, _entry(), mileage_entity="sensor.odo"),
+            signal_mileage_history_updated("test_entry"),
+        ),
+        (
+            lambda hass: SocHistory(hass, _entry(), soc_entity="sensor.soc"),
+            signal_soc_history_updated("test_entry"),
+        ),
+    ],
+)
+async def test_concrete_subclasses_override_hooks(
+    hass: HomeAssistant, make, expected_signal
+) -> None:
+    """Each concrete subclass supplies real `_read` / `_signal` impls.
+
+    `_signal` returns the per-entry dispatcher signal; `_read` returns None
+    when the source entity has no state (rather than raising the base stub).
+    """
+    history = make(hass)
+    assert history._signal() == expected_signal
+    assert history._read() is None
