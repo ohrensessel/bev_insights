@@ -138,11 +138,11 @@ def _find_last_complete_cycle(
     """Return (start_ts, end_ts) of the most recent off→on→off cycle.
 
     Walks the chronological list of charging-state samples and locates
-    the latest falling edge (charging → not charging). If a matching
-    rising edge (not charging → charging) precedes it without an
-    intervening falling edge, return both timestamps. Otherwise return
-    `(None, end_ts)` — the baseline is still recoverable, just without a
-    `last_session`.
+    the latest falling edge (charging → not charging), then walks back to
+    the rising edge (not charging → charging) that opened the session. If
+    both are found, return both timestamps. If no rising edge precedes the
+    falling edge (e.g. history begins mid-charge), return `(None, end_ts)`
+    — the baseline is still recoverable, just without a `last_session`.
 
     Returns `(None, None)` if no falling edge is found at all.
     """
@@ -164,10 +164,6 @@ def _find_last_complete_cycle(
         curr = charging_states[j]
         if not is_charging(prev) and is_charging(curr):
             start_ts = curr.last_updated
-            break
-        # A second falling edge before we found the rising one means the
-        # session boundary is ambiguous; bail rather than guess.
-        if is_charging(prev) and not is_charging(curr):
             break
     return start_ts, end_ts
 

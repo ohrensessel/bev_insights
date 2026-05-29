@@ -441,6 +441,26 @@ def test_find_last_complete_cycle_picks_latest_falling_edge() -> None:
     assert (dt_util.utcnow() - end_ts) < timedelta(days=5)
 
 
+def test_find_last_complete_cycle_walks_back_through_sustained_charging() -> None:
+    """Multiple consecutive 'on' samples between the rising and falling edges.
+
+    The walk-back must skip the intermediate charging samples and anchor on
+    the rising edge that actually opened the session, not the nearest sample.
+    """
+    states = [
+        _state(CHARGING, "off", offset_days=10),
+        _state(CHARGING, "on", offset_days=9),  # rising edge
+        _state(CHARGING, "on", offset_days=8),  # still charging
+        _state(CHARGING, "on", offset_days=7),  # still charging
+        _state(CHARGING, "off", offset_days=6),  # falling edge
+    ]
+    start_ts, end_ts = _find_last_complete_cycle(states)
+    assert start_ts is not None
+    assert end_ts is not None
+    # Start anchors on the 9-days-ago rising edge, not the 7-days-ago sample.
+    assert (dt_util.utcnow() - start_ts) > timedelta(days=8)
+
+
 def test_find_last_complete_cycle_returns_none_when_no_falling_edge() -> None:
     states = [
         _state(CHARGING, "off", offset_days=5),
