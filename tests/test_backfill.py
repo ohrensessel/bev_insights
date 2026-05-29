@@ -294,6 +294,13 @@ async def test_backfill_from_recorder_executes_fetch_closure(
     async def _invoke_fn(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
+    # Don't bake HA's positional signature into the stub; accept anything and
+    # assert only the contract we rely on — that `_fetch` requests our entity
+    # by id. Keeps the test robust to recorder-API param reordering/renames.
+    def _fake_state_changes(*args, **kwargs):
+        assert kwargs["entity_id"] == "sensor.soc"
+        return {"sensor.soc": mock_states}
+
     mock_instance = MagicMock()
     mock_instance.async_add_executor_job = AsyncMock(side_effect=_invoke_fn)
 
@@ -304,7 +311,7 @@ async def test_backfill_from_recorder_executes_fetch_closure(
             patch.object(
                 _hass_recorder.history,
                 "state_changes_during_period",
-                return_value={"sensor.soc": mock_states},
+                side_effect=_fake_state_changes,
             ),
         ):
             await async_backfill_from_recorder(hass, history, "sensor.soc", days=8)
@@ -725,7 +732,11 @@ async def test_tracker_recorder_backfill_executes_fetch_closure(
         ],
     }
 
-    def _fake_state_changes(_hass, _start, *, entity_id, no_attributes):
+    # Accept any signature; assert only that the closure requests a known
+    # entity by id, so the test doesn't break on recorder-API param changes.
+    def _fake_state_changes(*args, **kwargs):
+        entity_id = kwargs["entity_id"]
+        assert entity_id in per_entity
         return {entity_id: per_entity.get(entity_id, [])}
 
     async def _invoke_fn(fn, *args, **kwargs):
