@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfLength
+from homeassistant.const import (
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfLength,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant, State
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,6 +66,36 @@ def read_distance_km(hass: HomeAssistant, entity_id: str) -> float | None:
         )
         factor = 1.0
     return value * factor
+
+
+def _fahrenheit_to_celsius(value: float) -> float:
+    return (value - 32.0) * 5.0 / 9.0
+
+
+def read_temperature_c(hass: HomeAssistant, entity_id: str) -> float | None:
+    """Return an entity's temperature in °C regardless of source unit.
+
+    HA may report the outside-temperature sensor in °F for imperial users;
+    we normalise to °C so the band thresholds stay unit-agnostic.
+    """
+    state = hass.states.get(entity_id)
+    if state is None or state.state in INVALID_STATES:
+        return None
+    return temperature_c_from_state(state)
+
+
+def temperature_c_from_state(state: State) -> float | None:
+    """Parse a (possibly historical) State's temperature into °C, or None."""
+    if state.state in INVALID_STATES:
+        return None
+    try:
+        value = float(state.state)
+    except (TypeError, ValueError):
+        return None
+    unit = state.attributes.get("unit_of_measurement")
+    if unit == UnitOfTemperature.FAHRENHEIT:
+        return _fahrenheit_to_celsius(value)
+    return value
 
 
 # Values we consider "the car is charging right now".

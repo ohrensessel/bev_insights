@@ -10,12 +10,14 @@
           "range_sensor": "Remaining electric range sensor",
           "charging_sensor": "Charging-state sensor (optional)",
           "mileage_sensor": "Mileage / odometer sensor (optional)",
+          "outside_temp_sensor": "Outside temperature sensor (optional)",
           "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
           "capacity_actual_entity": "Live actual battery capacity entity"
         },
         "data_description": {
           "charging_sensor": "Used to detect when a charge has just ended. May be a sensor or a binary_sensor.",
           "mileage_sensor": "The car's odometer, used to measure distance driven since the last charge.",
+          "outside_temp_sensor": "An outside air-temperature sensor. Enables the 'Efficiency vs temperature' sensor, which correlates driving efficiency against the daily-average temperature to surface cold-weather range loss.",
           "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
           "capacity_actual_entity": "An input_number helper or sensor whose state is your battery's current real-world capacity in kWh. Change the helper's value to update all actual-capacity sensors without reloading the integration."
         }
@@ -29,12 +31,14 @@
           "range_sensor": "Remaining electric range sensor",
           "charging_sensor": "Charging-state sensor (optional)",
           "mileage_sensor": "Mileage / odometer sensor (optional)",
+          "outside_temp_sensor": "Outside temperature sensor (optional)",
           "capacity_factory_kwh": "Factory-new battery capacity (kWh)",
           "capacity_actual_entity": "Live actual battery capacity entity"
         },
         "data_description": {
           "charging_sensor": "Used to detect when a charge has just ended. May be a sensor or a binary_sensor.",
           "mileage_sensor": "The car's odometer, used to measure distance driven since the last charge.",
+          "outside_temp_sensor": "An outside air-temperature sensor. Enables the 'Efficiency vs temperature' sensor, which correlates driving efficiency against the daily-average temperature to surface cold-weather range loss.",
           "capacity_factory_kwh": "Nameplate / spec capacity of a fresh battery (e.g. 77 kWh for an Enyaq 85).",
           "capacity_actual_entity": "An input_number helper or sensor whose state is your battery's current real-world capacity in kWh. Change the helper's value to update all actual-capacity sensors without reloading the integration."
         }
@@ -554,6 +558,15 @@
           "capacity_source": { "name": "Capacity source" },
           "soc_consumed_percent": { "name": "SoC consumed this week" },
           "distance_km": { "name": "Distance this week" }
+        }
+      },
+      "efficiency_vs_temperature": {
+        "name": "Efficiency vs temperature",
+        "state_attributes": {
+          "window_days": { "name": "Analysis window (days)" },
+          "bands": { "name": "Efficiency by temperature band" },
+          "range_loss_percent": { "name": "Range loss, coldest vs warmest (%)" },
+          "partial_window_data": { "name": "Partial window data" }
         }
       }
     }

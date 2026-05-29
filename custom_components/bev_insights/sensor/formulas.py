@@ -15,6 +15,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.bev_insights.const import (
     BASELINE_MILEAGE_KM,
     BASELINE_SOC_PERCENT,
+    TEMPERATURE_BANDS,
     UNIT_KM_PER_KWH,
     UNIT_KWH_PER_100KM,
     UNIT_VARIANT_KM_PER_KWH,
@@ -135,3 +136,42 @@ def _window_cutoff(
         return _local_week_start(now_utc, hass)
     # Default: rolling 7 days
     return now_utc - timedelta(days=7)
+
+
+def _temperature_band(temp_c: float) -> str:
+    """Return the band key (from `TEMPERATURE_BANDS`) a temperature falls in.
+
+    Bands are half-open `[lower, upper)`; a None bound is open-ended. The
+    bands tile the real line, so exactly one always matches.
+    """
+    for key, lower, upper in TEMPERATURE_BANDS:
+        if (lower is None or temp_c >= lower) and (upper is None or temp_c < upper):
+            return key
+    # Bands are exhaustive; the last one is open-ended upward.
+    return TEMPERATURE_BANDS[-1][0]
+
+
+def _local_day_windows(
+    start_utc: datetime, end_utc: datetime, hass: HomeAssistant
+) -> list[tuple[datetime, datetime]]:
+    """Split `[start_utc, end_utc)` into per-local-calendar-day UTC windows.
+
+    Each returned `(day_start, day_end)` pair is clamped to the requested
+    range, so the first and last days may be partial. Boundaries are local
+    midnights converted back to UTC, so a day means the user's calendar day
+    rather than a UTC day. Returns an empty list when `end_utc <= start_utc`.
+    """
+    if end_utc <= start_utc:
+        return []
+    local_tz = dt_util.get_time_zone(hass.config.time_zone) or dt_util.UTC
+    windows: list[tuple[datetime, datetime]] = []
+    cursor = start_utc
+    while cursor < end_utc:
+        local = cursor.astimezone(local_tz)
+        next_local_midnight = (local + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        day_end = min(next_local_midnight.astimezone(dt_util.UTC), end_utc)
+        windows.append((cursor, day_end))
+        cursor = day_end
+    return windows

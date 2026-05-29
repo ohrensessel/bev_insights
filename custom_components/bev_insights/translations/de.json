@@ -10,12 +10,14 @@
           "range_sensor": "Verbleibende elektrische Reichweite Sensor",
           "charging_sensor": "Ladezustand-Sensor (optional)",
           "mileage_sensor": "Kilometerstand-Sensor (optional)",
+          "outside_temp_sensor": "Außentemperatur-Sensor (optional)",
           "capacity_factory_kwh": "Werksneue Batteriekapazität (kWh)",
           "capacity_actual_entity": "Aktuelle Batteriekapazität (Entity)"
         },
         "data_description": {
           "charging_sensor": "Erkennt, wann ein Ladevorgang abgeschlossen ist. Kann ein sensor oder ein binary_sensor sein.",
           "mileage_sensor": "Tachometerstand des Fahrzeugs zur Messung der Fahrleistung seit dem letzten Ladevorgang.",
+          "outside_temp_sensor": "Ein Außenlufttemperatur-Sensor. Aktiviert den Sensor „Effizienz vs. Temperatur“, der die Fahreffizienz mit der durchschnittlichen Tagestemperatur korreliert, um den Reichweitenverlust bei Kälte sichtbar zu machen.",
           "capacity_factory_kwh": "Nominale Kapazität einer neuen Batterie (z. B. 77 kWh für einen Enyaq 85).",
           "capacity_actual_entity": "Ein input_number-Helfer oder Sensor, der die aktuelle reale Kapazität der Batterie in kWh anzeigt. Änderungen am Hilfsobjekt aktualisieren alle Sensoren für die tatsächliche Kapazität ohne Neuladen der Integration."
         }
@@ -29,12 +31,14 @@
           "range_sensor": "Verbleibende elektrische Reichweite Sensor",
           "charging_sensor": "Ladezustand-Sensor (optional)",
           "mileage_sensor": "Kilometerstand-Sensor (optional)",
+          "outside_temp_sensor": "Außentemperatur-Sensor (optional)",
           "capacity_factory_kwh": "Werksneue Batteriekapazität (kWh)",
           "capacity_actual_entity": "Aktuelle Batteriekapazität (Entity)"
         },
         "data_description": {
           "charging_sensor": "Erkennt, wann ein Ladevorgang abgeschlossen ist. Kann ein sensor oder ein binary_sensor sein.",
           "mileage_sensor": "Tachometerstand des Fahrzeugs zur Messung der Fahrleistung seit dem letzten Ladevorgang.",
+          "outside_temp_sensor": "Ein Außenlufttemperatur-Sensor. Aktiviert den Sensor „Effizienz vs. Temperatur“, der die Fahreffizienz mit der durchschnittlichen Tagestemperatur korreliert, um den Reichweitenverlust bei Kälte sichtbar zu machen.",
           "capacity_factory_kwh": "Nominale Kapazität einer neuen Batterie (z. B. 77 kWh für einen Enyaq 85).",
           "capacity_actual_entity": "Ein input_number-Helfer oder Sensor, der die aktuelle reale Kapazität der Batterie in kWh anzeigt. Änderungen am Hilfsobjekt aktualisieren alle Sensoren für die tatsächliche Kapazität ohne Neuladen der Integration."
         }
@@ -554,6 +558,15 @@
           "capacity_source": { "name": "Kapazitätsquelle" },
           "soc_consumed_percent": { "name": "SoC-Verbrauch diese Woche" },
           "distance_km": { "name": "Strecke diese Woche" }
+        }
+      },
+      "efficiency_vs_temperature": {
+        "name": "Effizienz vs. Temperatur",
+        "state_attributes": {
+          "window_days": { "name": "Analysezeitraum (Tage)" },
+          "bands": { "name": "Effizienz nach Temperaturbereich" },
+          "range_loss_percent": { "name": "Reichweitenverlust, kältester vs. wärmster (%)" },
+          "partial_window_data": { "name": "Teildaten des Zeitraums" }
         }
       }
     }

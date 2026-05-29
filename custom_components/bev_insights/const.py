@@ -14,6 +14,10 @@ CONF_SOC_SENSOR = "soc_sensor"
 CONF_RANGE_SENSOR = "range_sensor"
 CONF_CHARGING_SENSOR = "charging_sensor"
 CONF_MILEAGE_SENSOR = "mileage_sensor"
+# Optional outside-air-temperature sensor. When set, the integration
+# correlates driving efficiency against the daily-average temperature to
+# surface cold-weather range loss.
+CONF_OUTSIDE_TEMP_SENSOR = "outside_temp_sensor"
 CONF_CAPACITY_FACTORY = "capacity_factory_kwh"
 # v1: a number (kWh).  v2+: an entity_id whose state is read as the live
 # actual remaining capacity in kWh.
@@ -76,6 +80,7 @@ STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}.charge_tracker"
 MILEAGE_HISTORY_KEY_PREFIX = f"{DOMAIN}.mileage_history"
 SOC_HISTORY_KEY_PREFIX = f"{DOMAIN}.soc_history"
+TEMPERATURE_HISTORY_KEY_PREFIX = f"{DOMAIN}.temperature_history"
 
 # How many days of samples to retain. 15 days covers two full calendar
 # weeks so the week-over-week delta sensors always have last week's
@@ -84,6 +89,18 @@ SOC_HISTORY_KEY_PREFIX = f"{DOMAIN}.soc_history"
 # `history_days` in options keep their value.
 MILEAGE_HISTORY_DAYS = 15
 SOC_HISTORY_DAYS = 15
+TEMPERATURE_HISTORY_DAYS = 15
+
+# Temperature bands (°C) the efficiency-vs-temperature sensor groups daily
+# averages into. Each entry is (key, lower_inclusive, upper_exclusive); a
+# None bound means open-ended. Chosen for a temperate climate: a sub-zero
+# band (heaviest range loss), two mild bands, and a warm band.
+TEMPERATURE_BANDS: tuple[tuple[str, float | None, float | None], ...] = (
+    ("below_0", None, 0.0),
+    ("0_to_10", 0.0, 10.0),
+    ("10_to_20", 10.0, 20.0),
+    ("above_20", 20.0, None),
+)
 
 # Dispatcher signal sent when a charge-end event updates the baseline.
 # Format the per-entry signal name with `signal_baseline_updated(entry_id)`.
@@ -100,6 +117,11 @@ def signal_mileage_history_updated(entry_id: str) -> str:
 def signal_soc_history_updated(entry_id: str) -> str:
     """Return the per-entry dispatcher signal fired on a new SoC sample."""
     return f"{DOMAIN}_soc_history_updated_{entry_id}"
+
+
+def signal_temperature_history_updated(entry_id: str) -> str:
+    """Return the per-entry dispatcher signal fired on a new temperature sample."""
+    return f"{DOMAIN}_temperature_history_updated_{entry_id}"
 
 
 # Baseline dict keys (what we persist via Store)

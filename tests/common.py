@@ -24,6 +24,7 @@ RANGE_ENTITY = "sensor.car_range"
 MILEAGE_ENTITY = "sensor.car_mileage"
 CHARGING_ENTITY = "binary_sensor.car_charging"
 ACTUAL_CAPACITY_ENTITY = "input_number.car_actual_capacity"
+OUTSIDE_TEMP_ENTITY = "sensor.outside_temperature"
 
 
 def base_entry_data(**overrides: Any) -> dict[str, Any]:

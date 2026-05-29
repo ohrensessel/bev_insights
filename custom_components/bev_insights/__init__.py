@@ -31,6 +31,7 @@ from .const import (
     CONF_CHARGING_SENSOR,
     CONF_HISTORY_DAYS,
     CONF_MILEAGE_SENSOR,
+    CONF_OUTSIDE_TEMP_SENSOR,
     CONF_SOC_SENSOR,
     CONFIG_ENTRY_VERSION,
     DEFAULT_CAPACITY_KWH,
@@ -40,7 +41,7 @@ from .const import (
     STORAGE_VERSION,
 )
 from .repairs import async_clear_repairs, async_setup_repairs
-from .tracker import ChargeTracker, MileageHistory, SocHistory
+from .tracker import ChargeTracker, MileageHistory, SocHistory, TemperatureHistory
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ _STORAGE_SUFFIXES: tuple[str, ...] = (
     "charge_tracker",
     "mileage_history",
     "soc_history",
+    "temperature_history",
 )
 
 
@@ -121,6 +123,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     soc_history.async_start()
 
+    # Optional outside-temperature history powers the efficiency-vs-temperature
+    # sensor. Only built when the user configured a temperature source.
+    temperature_entity = entry.data.get(CONF_OUTSIDE_TEMP_SENSOR)
+    temperature_history: TemperatureHistory | None = None
+    if temperature_entity:
+        temperature_history = TemperatureHistory(
+            hass,
+            entry,
+            temperature_entity=temperature_entity,
+            max_age_days=history_days,
+        )
+        await temperature_history.async_load()
+        await async_backfill_from_recorder(
+            hass, temperature_history, temperature_entity, days=history_days
+        )
+        temperature_history.async_start()
+
     # Build the two capacity sources up front so sensor.py doesn't need
     # to know how to read them — it just calls .current() per recalc.
     capacity_factory: CapacitySource = FixedCapacity(
@@ -135,6 +154,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "tracker": tracker,
         "mileage_history": mileage_history,
         "soc_history": soc_history,
+        "temperature_history": temperature_history,
         "capacity_factory": capacity_factory,
         "capacity_actual": capacity_actual,
     }
@@ -160,6 +180,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await mileage_history.async_stop()
             if soc_history := domain_data.get("soc_history"):
                 await soc_history.async_stop()
+            if temperature_history := domain_data.get("temperature_history"):
+                await temperature_history.async_stop()
     return unload_ok
 
 

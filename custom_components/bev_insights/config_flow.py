@@ -19,6 +19,7 @@ from .const import (
     CONF_MIN_MEASURED_RANGE_KM,
     CONF_MIN_MEASURED_RANGE_SOC_PERCENT,
     CONF_NAME,
+    CONF_OUTSIDE_TEMP_SENSOR,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
     CONF_STANDSTILL_MOVEMENT_THRESHOLD_KM,
@@ -115,6 +116,14 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         ] = _sensor_selector()
     else:
         fields[vol.Optional(CONF_MILEAGE_SENSOR)] = _sensor_selector()
+
+    temp_default = defaults.get(CONF_OUTSIDE_TEMP_SENSOR)
+    if temp_default is not None:
+        fields[
+            vol.Optional(CONF_OUTSIDE_TEMP_SENSOR, default=temp_default)
+        ] = _sensor_selector()
+    else:
+        fields[vol.Optional(CONF_OUTSIDE_TEMP_SENSOR)] = _sensor_selector()
 
     return vol.Schema(fields)
 

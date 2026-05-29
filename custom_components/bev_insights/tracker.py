@@ -50,9 +50,12 @@ from .const import (
     STANDSTILL_MOVEMENT_THRESHOLD_KM,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
+    TEMPERATURE_HISTORY_DAYS,
+    TEMPERATURE_HISTORY_KEY_PREFIX,
     signal_baseline_updated,
     signal_mileage_history_updated,
     signal_soc_history_updated,
+    signal_temperature_history_updated,
 )
 from .util import (
     _DISTANCE_TO_KM,
@@ -60,6 +63,8 @@ from .util import (
     is_charging,
     read_distance_km,
     read_float,
+    read_temperature_c,
+    temperature_c_from_state,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -797,3 +802,69 @@ class SocHistory(EntityHistory):
                 continue
             consumed += soc_drop
         return consumed
+
+
+class TemperatureHistory(EntityHistory):
+    """Rolling window of outside-air-temperature samples in °C."""
+
+    _label = "temperature"
+    _value_key = "temperature_c"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        temperature_entity: str,
+        max_age_days: int = TEMPERATURE_HISTORY_DAYS,
+    ) -> None:
+        super().__init__(
+            hass,
+            entry,
+            source_entity=temperature_entity,
+            storage_key_prefix=TEMPERATURE_HISTORY_KEY_PREFIX,
+            max_age_days=max_age_days,
+        )
+
+    def _read(self) -> float | None:
+        return read_temperature_c(self.hass, self._source_entity)
+
+    def _signal(self) -> str:
+        return signal_temperature_history_updated(self.entry.entry_id)
+
+    def _backfill_parse(self, state: State) -> float | None:
+        return temperature_c_from_state(state)
+
+    def daily_average(self, start: datetime, end: datetime) -> float | None:
+        """Return the time-weighted mean temperature over ``[start, end)``.
+
+        Samples are recorded only when the source entity changes, so the
+        value is piecewise-constant: each sample holds until the next one.
+        A plain arithmetic mean would over-weight volatile periods, so we
+        weight each segment by its duration instead. Returns None when no
+        value can be anchored across the interval.
+        """
+        if not self._samples or end <= start:
+            return None
+        current = self.value_at(start)
+        cursor = start
+        weighted = 0.0
+        total_seconds = 0.0
+        for ts, value in self._samples:
+            if ts <= start:
+                current = value
+                continue
+            if ts >= end:
+                break
+            if current is not None:
+                duration = (ts - cursor).total_seconds()
+                weighted += current * duration
+                total_seconds += duration
+            cursor = ts
+            current = value
+        if current is not None:
+            duration = (end - cursor).total_seconds()
+            weighted += current * duration
+            total_seconds += duration
+        if total_seconds <= 0:
+            return None
+        return weighted / total_seconds

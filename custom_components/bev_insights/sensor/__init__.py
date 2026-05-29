@@ -24,10 +24,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from custom_components.bev_insights.capacity import CapacitySource
 from custom_components.bev_insights.const import (
     CONF_CHARGING_SENSOR,
+    CONF_HISTORY_DAYS,
     CONF_MILEAGE_SENSOR,
     CONF_RANGE_SENSOR,
     CONF_SOC_SENSOR,
     DOMAIN,
+    MILEAGE_HISTORY_DAYS,
     UNIT_VARIANT_KM_PER_KWH,
     UNIT_VARIANT_KWH_PER_100KM,
     VARIANT_ACTUAL,
@@ -37,6 +39,7 @@ from custom_components.bev_insights.tracker import (
     ChargeTracker,
     MileageHistory,
     SocHistory,
+    TemperatureHistory,
 )
 
 from .deltas import DistanceWeekDeltaSensor, EnergyConsumedWeekDeltaSensor
@@ -59,6 +62,7 @@ from .formulas import (
 )
 from .instantaneous import EfficiencySensor, FullBatteryRangeSensor, StateOfHealthSensor
 from .long_term import DistanceThisMonthSensor, DistanceThisYearSensor
+from .temperature import EfficiencyVsTemperatureSensor
 from .tracker_linked import (
     AverageChargingPowerSensor,
     LastChargeAddedSensor,
@@ -96,6 +100,9 @@ async def async_setup_entry(
     tracker: ChargeTracker | None = domain_data.get("tracker")
     mileage_history: MileageHistory | None = domain_data.get("mileage_history")
     soc_history: SocHistory | None = domain_data.get("soc_history")
+    temperature_history: TemperatureHistory | None = domain_data.get(
+        "temperature_history"
+    )
     capacity_factory: CapacitySource = domain_data["capacity_factory"]
     capacity_actual: CapacitySource = domain_data["capacity_actual"]
 
@@ -318,6 +325,27 @@ async def async_setup_entry(
                         )
                     )
 
+    # Efficiency vs. outside temperature — needs all three histories.
+    if (
+        temperature_history is not None
+        and soc_history is not None
+        and mileage_history is not None
+    ):
+        window_days = int(
+            entry.options.get(CONF_HISTORY_DAYS, MILEAGE_HISTORY_DAYS)
+        )
+        entities.append(
+            EfficiencyVsTemperatureSensor(
+                entry,
+                temperature_history,
+                soc_history,
+                mileage_history,
+                capacity_factory=capacity_factory,
+                capacity_actual=capacity_actual,
+                window_days=window_days,
+            )
+        )
+
     async_add_entities(entities)
 
 
@@ -332,6 +360,7 @@ __all__ = [
     "DistanceThisYearSensor",
     "DistanceWeekDeltaSensor",
     "EfficiencySensor",
+    "EfficiencyVsTemperatureSensor",
     "EnergyConsumedWeekDeltaSensor",
     "EnergyConsumedWindowSensor",
     "FullBatteryRangeSensor",
