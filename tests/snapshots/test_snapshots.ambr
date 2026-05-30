@@ -80,7 +80,7 @@
       'is_charging': False,
       'last_session': None,
     }),
-    'version': '1.6.0',
+    'version': '1.7.0',
   })
 # ---
 # name: test_entity_schema_snapshot

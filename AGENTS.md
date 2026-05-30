@@ -9,9 +9,13 @@ A Home Assistant custom integration that consumes a small set of source
 entities (SoC, range, optional charging-state, optional odometer) and
 exposes derived EV insights (efficiency, measured range, weekly
 distance/energy, state of health, vampire-drain ratio, charge count,
-days-to-low-SoC projection, etc.) — currently **47 sensors per
-fully-wired config entry** (`tests/test_setup_smoke.py::EXPECTED_SUFFIXES`
-is the canonical list and the smoke test asserts the count).
+days-to-low-SoC projection, temperature-correlated efficiency, etc.) —
+currently **up to 48 sensors per config entry**. 47 of them come from the
+SoC / range / charging / mileage sources and are the canonical list in
+`tests/test_setup_smoke.py::EXPECTED_SUFFIXES` (the smoke test asserts
+that count). The 48th — **Efficiency vs temperature** — only exists when
+the optional outside-temperature sensor is configured, so it's covered by
+`tests/test_temperature.py` rather than the smoke test.
 
 Originally developed against the `homeassistant-myskoda` integration on
 a Škoda Enyaq 85; renamed to `bev_insights` in v1.0.0 to reflect that
@@ -111,9 +115,9 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 |---|---|
 | `__init__.py` | `async_setup_entry` wires tracker + histories + capacity sources; `async_migrate_entry` handles v1→v2 config-entry schema; `_migrate_legacy_storage` adopts pre-v1.0 `myskoda_insights.*` storage on first setup; kicks off the recorder backfill. |
 | `sensor/` | Sensor package (split from a monolithic `sensor.py` in v1.5.0). See breakdown below. |
-| `tracker.py` | `ChargeTracker` (charge-end baseline + last session, plus `is_charging` property), `EntityHistory` base, `MileageHistory`, `SocHistory`. 8-day rolling deques persisted via `Store` with **debounced writes** (10 s window) to keep disk churn down. |
+| `tracker.py` | `ChargeTracker` (charge-end baseline + last session, plus `is_charging` property), `EntityHistory` base, `MileageHistory`, `SocHistory`, `TemperatureHistory` (adds a time-weighted `daily_average`). Rolling deques (`history_days` default = 15) persisted via `Store` with **debounced writes** (10 s window) to keep disk churn down. |
 | `capacity.py` | `CapacitySource` ABC → `FixedCapacity` (nameplate kWh) and `EntityCapacity` (live `input_number` / sensor). |
-| `util.py` | `read_float`, `read_distance_km` (unit-aware), `is_charging`. |
+| `util.py` | `read_float`, `read_distance_km` (unit-aware), `read_temperature_c` (°F→°C aware), `is_charging`. |
 | `const.py` | All constants; per-entry dispatcher signal name builders; `LEGACY_DOMAIN` and `MIN_MEASURED_RANGE_*` thresholds. |
 | `config_flow.py` | v2 schema, `async_step_user` + `async_step_reconfigure`. |
 | `backfill.py` | Reads the prior 8 days of source-entity states from HA's recorder on first install and primes the history deques. Also walks the charging-state entity for the most recent off → on → off cycle and seeds `ChargeTracker` with a baseline (and `last_session`) so tracker-linked sensors don't have to wait for the next live charge. Wrapped in try/except so missing/older recorder APIs are silently ignored. |
@@ -130,6 +134,7 @@ change the workflow if you switch add-ons.) `--delete` is on, and
 | `instantaneous.py` | `FullBatteryRangeSensor`, `StateOfHealthSensor`, `EfficiencySensor` — only need live source entities. |
 | `tracker_linked.py` | `MeasuredFullRangeSensor`, `MeasuredEfficiencySensor`, `LastChargedSensor`, `TimeSinceLastChargeSensor`, `SessionLogSensor`, `LastChargeAddedSensor`, `AverageChargingPowerSensor` — driven by `ChargeTracker` baselines. |
 | `distance.py` | `DistanceRolling7DaysSensor`, `DistanceThisWeekSensor`, `DaysToLowSocSensor`, `IdleTimeSensor`. |
+| `temperature.py` | `EfficiencyVsTemperatureSensor` — state is today's time-weighted average outside temp; attributes carry a per-temperature-band efficiency breakdown over the rolling window plus `range_loss_percent`. Only instantiated when `TemperatureHistory` is present (outside-temp sensor configured). |
 | `window.py` | `_WindowedSensor` base + `EnergyConsumedWindowSensor`, `StandstillConsumptionWindowSensor`, `StandstillRatioWindowSensor`, `ChargeCountWindowSensor`, `AverageEfficiencyWindowSensor`. |
 | `long_term.py` | `_LongTermDistanceSensor` base + `DistanceThisMonthSensor`, `DistanceThisYearSensor`. Read the baseline odometer at period start from HA's `statistics` table (not the in-memory deque), cache it for the period, refresh on the hourly tick. |
 | `deltas.py` | `DistanceWeekDeltaSensor` + `EnergyConsumedWeekDeltaSensor` × {factory, actual}. Compute this-week-so-far minus last-week-up-to-same-elapsed-time using `MileageHistory.distance_between` / `SocHistory.consumed_between`. Need ≥ 14 days of history — default retention was bumped from 8 to 15 days in v1.6 to cover the worst case (Sunday evening). |
@@ -167,6 +172,7 @@ per-entry dispatcher signals:
 ```python
 signal_mileage_history_updated(entry_id)
 signal_soc_history_updated(entry_id)
+signal_temperature_history_updated(entry_id)  # only when an outside-temp sensor is configured
 signal_baseline_updated(entry_id)
 ```
 

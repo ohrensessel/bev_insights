@@ -4,6 +4,36 @@ All notable changes to BEV Insights (formerly MySkoda Insights) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0]
+
+### Added
+- **`efficiency_vs_temperature` sensor.** A new optional sensor that
+  correlates driving efficiency against the outside temperature to
+  surface cold-weather range loss. Configure an **outside temperature
+  sensor** (new optional config field; values in °F are converted to °C
+  automatically) to enable it.
+
+  The state is today's time-weighted average outside temperature
+  (`device_class=TEMPERATURE`, `state_class=MEASUREMENT`, °C). The
+  attributes carry the analysis: each local calendar day in the retained
+  history window is assigned to a temperature band (`< 0 °C`, `0–10 °C`,
+  `10–20 °C`, `≥ 20 °C`) by its own time-weighted daily average, and that
+  day's driving distance + SoC consumed are folded into the band. Days
+  with no driving are skipped so they don't dilute the figures. The
+  `bands` attribute is a per-band table of distance, SoC consumed, day
+  count and efficiency (factory/actual × kWh/100 km / km/kWh), and
+  `range_loss_percent` compares the coldest populated band's kWh/100 km
+  against the warmest — one number for the cold-weather penalty.
+
+  Reuses the existing rolling-window history machinery: a new
+  `TemperatureHistory` (an `EntityHistory` subclass with a time-weighted
+  `daily_average`) records the outside-temp sensor, is persisted via
+  `Store` and primed from HA's recorder on first install like the SoC and
+  mileage histories. The breakdown therefore covers the retained
+  `history_days` (default 15), not a full season. Entity count rises from
+  47 to **up to 48** — the new sensor only exists when the outside-temp
+  sensor is configured.
+
 ## [1.6.0]
 
 ### Added

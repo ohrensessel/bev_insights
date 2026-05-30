@@ -13,9 +13,10 @@
 
 # BEV Insights
 
-A Home Assistant custom integration that derives **up to 47 additional sensors** for a
+A Home Assistant custom integration that derives **up to 48 additional sensors** for a
 battery-electric vehicle from a small set of source entities: battery percentage (SoC),
-remaining range, an optional charging-state indicator, and an optional odometer reading.
+remaining range, an optional charging-state indicator, an optional odometer reading, and
+an optional outside-temperature sensor.
 
 > **Tested with:** the [`homeassistant-myskoda`](https://github.com/skodaconnect/homeassistant-myskoda)
 > integration (Škoda Enyaq). The source entities are integration-agnostic — any
@@ -138,6 +139,30 @@ negative means "less". The default `history_days` is 15 so last week's start sam
 always inside the deque; users who set `history_days` below 15 see `partial_window_data:
 true` and may get inaccurate comparisons later in the week.
 
+### Temperature-correlation sensor (requires an outside-temperature sensor)
+
+| Entity | State | Attributes |
+|---|---|---|
+| Efficiency vs temperature | Today's time-weighted average outside temperature (°C) | Per-band efficiency breakdown + `range_loss_percent` |
+
+When you configure an **outside temperature sensor**, the integration records its history
+in the same rolling window as SoC and mileage and adds an **Efficiency vs temperature**
+sensor. The state is today's time-weighted average outside temperature; the interesting
+data is in the attributes.
+
+Each local calendar day in the retained window is assigned to a temperature band by its
+own time-weighted average temperature (`< 0 °C`, `0–10 °C`, `10–20 °C`, `≥ 20 °C`), and
+that day's driving distance and SoC consumed are folded into the band. Days with no
+driving are ignored so they don't dilute the figures. The `bands` attribute is a table of
+distance, SoC consumed, day count and efficiency (factory/actual × kWh/100 km / km/kWh)
+per band. A `range_loss_percent` figure compares the kWh/100 km of the coldest populated
+band against the warmest — a single number for "how much range does the cold cost me?".
+
+Because it reuses the rolling history window, the breakdown only covers the retained
+`history_days` (default 15); it surfaces near-term cold-weather behaviour rather than a
+season-long record. `partial_window_data: true` appears in attributes until the window has
+filled with temperature samples.
+
 ## When sensors become available
 
 A condensed map of what each sensor cluster needs before it stops reporting
@@ -150,6 +175,7 @@ A condensed map of what each sensor cluster needs before it stops reporting
 | **First full charge cycle completes** (off → on → off) | Last charge added (×2), Average charging power (×2) |
 | **First charge end + enough post-charge driving** (≥ 20 km / 2 % SoC, tuneable) | Measured full range, Measured efficiency (×4) |
 | **SoC / mileage history accumulates** (or is backfilled from HA's recorder on first install — v1.4.0+) | Distance driven, Energy consumed, Average efficiency, Standstill consumption + ratio, Days to low SoC, Idle time |
+| **Outside-temperature sensor configured + temperature history accumulates** (v1.7.0+) | Efficiency vs temperature |
 
 Once a sensor has populated, going back to `unavailable` usually means a source entity
 went away (renamed, integration unloaded, restored without it). The **Repairs** panel
@@ -190,6 +216,7 @@ All issues clear automatically as soon as the underlying condition resolves.
 | Live actual battery capacity entity | Yes | An `input_number` helper or sensor in kWh. Change its value to update all actual-capacity sensors live without reloading the integration. |
 | Charging-state sensor (optional) | No | Enables charge-tracker sensors. May be a `sensor` or `binary_sensor`. |
 | Mileage / odometer sensor (optional) | No | Enables charge-tracker and window sensors. |
+| Outside temperature sensor (optional) | No | Enables the *Efficiency vs temperature* sensor. Values in °F are converted to °C automatically. |
 
 ### Home Assistant Energy Dashboard
 
@@ -290,10 +317,12 @@ reference back in v0.7. When upgrading from a v1 config entry:
   first install it walks the recorder for the most recent off → on → off cycle and
   adopts that as the baseline (and `last_session`) so the tracker-linked sensors don't
   have to wait for the next live charge.
-- `MileageHistory` and `SocHistory` maintain rolling deques of samples
-  (`history_days` default = 15), persisted via `Store` with debounced writes (10 s
-  window) to keep disk churn down. On first install they're primed from HA's recorder
-  so the window sensors typically light up immediately.
+- `MileageHistory`, `SocHistory` and (when an outside-temperature sensor is configured)
+  `TemperatureHistory` maintain rolling deques of samples (`history_days` default = 15),
+  persisted via `Store` with debounced writes (10 s window) to keep disk churn down. On
+  first install they're primed from HA's recorder so the window sensors typically light up
+  immediately. `TemperatureHistory` adds a time-weighted `daily_average` used to assign
+  each day to a temperature band.
 - The `CapacitySource` abstraction (`FixedCapacity` / `EntityCapacity`) allows sensors
   to call `.current()` per recalculation. `EntityCapacity` sensors additionally subscribe
   to their source entity's state changes so they recompute the instant the helper moves.
